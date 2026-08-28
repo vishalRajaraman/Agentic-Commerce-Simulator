@@ -23,9 +23,18 @@ def init_db():
     count = cursor.fetchone()[0]
     if count == 0:
         merchants_data = [
-            ("merch_premium_beans", "Premium Beans Co.", "coffee, whole bean, espresso", "/api/merchant/merch_premium_beans/interact"),
-            ("merch_budget_roasters", "Budget Roasters", "coffee, bulk, drip", "/api/merchant/merch_budget_roasters/interact"),
-            ("merch_tea_house", "The Tea House", "tea, loose leaf", "/api/merchant/merch_tea_house/interact")
+            # Electronics
+            ("merchant_001_electronics", "Electro World", "electronics, laptops, smartphones", "/api/merchant/merchant_001_electronics/interact"),
+            ("merchant_002_electronics", "Tech Haven", "electronics, gadgets, accessories", "/api/merchant/merchant_002_electronics/interact"),
+            ("merchant_003_electronics", "Gizmo Hub", "electronics, smart home, audio", "/api/merchant/merchant_003_electronics/interact"),
+            
+            # Clothing
+            ("merchant_004_clothing", "Fashion Forward", "clothing, apparel, fashion", "/api/merchant/merchant_004_clothing/interact"),
+            ("merchant_005_clothing", "Urban Wear", "clothing, streetwear, shoes", "/api/merchant/merchant_005_clothing/interact"),
+            
+            # Groceries
+            ("merchant_006_groceries", "Fresh Market", "groceries, fresh produce, meat", "/api/merchant/merchant_006_groceries/interact"),
+            ("merchant_007_groceries", "Pantry Essentials", "groceries, dry goods, snacks", "/api/merchant/merchant_007_groceries/interact")
         ]
         cursor.executemany('''
             INSERT INTO merchants (merchant_id, name, category, endpoint_interact)

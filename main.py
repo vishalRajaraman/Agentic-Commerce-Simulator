@@ -1,16 +1,63 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Form, BackgroundTasks
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from datetime import datetime, timezone
 
-import database
-from models import X402Message, X402Metadata, RegistryResponsePayload, MerchantMatch, MerchantEndpoint
+class ChatRequest(BaseModel):
+    customer_id: str
+    intent: str
+import os
 
-app = FastAPI(title="Central Discovery Registry")
+import database
+from mongo_db import MongoDB
+from models import X402Message, X402Metadata, RegistryResponsePayload, MerchantMatch, MerchantEndpoint
+from buyer_agent import process_user_intent
+from twilio.rest import Client
+
+app = FastAPI(title="Agentic Commerce Hub")
+
+# Mount the static directory to serve the frontend UI
+app.mount("/ui", StaticFiles(directory="static", html=True), name="static")
 
 @app.on_event("startup")
-def startup_event():
-    # Initialize the database and seed it on startup
+async def startup_event():
+    # Initialize SQLite (Registry) and Pinecone
     database.init_db()
+    # Initialize MongoDB (Memory, Sessions, Transactions)
+    MongoDB.connect()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    MongoDB.disconnect()
+
+@app.post("/twilio/whatsapp")
+async def twilio_whatsapp_webhook(
+    Body: str = Form(...),
+    From: str = Form(...),
+    background_tasks: BackgroundTasks = BackgroundTasks()
+):
+    """
+    Webhook to receive messages from Twilio WhatsApp.
+    We process the intent in the background so Twilio doesn't time out.
+    """
+    customer_id = From.replace("whatsapp:", "")
+    user_intent = Body
+    
+    # Run the buyer agent processing in the background
+    background_tasks.add_task(process_user_intent, customer_id, user_intent)
+    
+    # Twilio requires valid TwiML response. We return empty TwiML since the agent will reply via API later.
+    from fastapi.responses import Response
+    return Response(content='<Response></Response>', media_type="application/xml")
+
+@app.post("/api/chat")
+async def chat_endpoint(req: ChatRequest):
+    """
+    Endpoint for the web UI to interact with the agent.
+    """
+    response = await process_user_intent(req.customer_id, req.intent)
+    return {"reply": response}
+
 
 @app.post("/api/registry/search", response_model=X402Message)
 async def registry_search(request_payload: X402Message):

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic Commerce - Buyer Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            --glass-backdrop: blur(10px);
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            padding: 1.5rem 2rem;
+            background: var(--panel-bg);
+            backdrop-filter: var(--glass-backdrop);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Main Layout */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            padding: 1rem;
+            gap: 1rem;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: var(--glass-backdrop);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: var(--glass-shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        /* Chat Section */
+        .chat-section {
+            flex: 2;
+        }
+
+        .chat-history {
+            flex: 1;
+            padding: 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 1rem;
+            border-radius: 12px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .message.user {
+            background: var(--primary);
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .message.agent {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        .chat-input {
+            padding: 1rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 0.8rem 1.2rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.2);
+            color: white;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        .chat-input input:focus {
+            border-color: var(--primary);
+        }
+
+        .chat-input button {
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.1s;
+        }
+        
+        .chat-input button:hover {
+            background: var(--primary-hover);
+        }
+        
+        .chat-input button:active {
+            transform: scale(0.98);
+        }
+
+        /* Agent Logs / Tracking Section */
+        .side-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .agent-logs {
+            flex: 1;
+        }
+        
+        .log-list {
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .log-entry {
+            background: rgba(0,0,0,0.3);
+            padding: 0.5rem;
+            border-radius: 4px;
+            border-left: 3px solid #10b981;
+        }
+
+        .order-tracking {
+            flex: 1;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            text-align: left;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Agentic Commerce Hub</h1>
+        <div style="font-size: 0.9rem; color: var(--text-muted);">
+            User: <strong>vishal_123</strong>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Chat Area -->
+        <div class="panel chat-section">
+            <div class="panel-header">Buyer Agent Chat</div>
+            <div class="chat-history" id="chat-history">
+                <div class="message agent">
+                    Hello! I'm your autonomous Buyer Agent. What would you like me to find for you today?
+                </div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="user-input" placeholder="e.g. Find me the best deal on a new laptop..." onkeypress="handleEnter(event)">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- Sidebar Logs & Tracking -->
+        <div class="side-section">
+            <div class="panel agent-logs">
+                <div class="panel-header">Live Agent Thought Logs</div>
+                <div class="log-list" id="log-list">
+                    <div class="log-entry">> System initialized. Ready to process intents.</div>
+                </div>
+            </div>
+
+            <div class="panel order-tracking">
+                <div class="panel-header">Recent Orders</div>
+                <div style="padding: 0.5rem; overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Merchant</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="order-table-body">
+                            <tr>
+                                <td>Sony Headphones</td>
+                                <td>Tech Haven</td>
+                                <td><span class="status-badge">Paid</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function sendMessage() {
+            const inputEl = document.getElementById('user-input');
+            const message = inputEl.value.trim();
+            if(!message) return;
+            
+            // Add user message
+            addMessage(message, 'user');
+            inputEl.value = '';
+            
+            addLog(`> Sending intent to backend: "${message}"`);
+            
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ customer_id: "vishal_123", intent: message })
+                });
+                const data = await res.json();
+                addMessage(data.reply, 'agent');
+                addLog(`> Agent responded.`);
+            } catch (error) {
+                console.error(error);
+                addMessage("Error communicating with agent backend.", 'agent');
+            }
+        }
+
+        function handleEnter(e) {
+            if(e.key === 'Enter') sendMessage();
+        }
+
+        function addMessage(text, type) {
+            const history = document.getElementById('chat-history');
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${type}`;
+            msgDiv.innerText = text;
+            history.appendChild(msgDiv);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        function addLog(text) {
+            const logList = document.getElementById('log-list');
+            const logDiv = document.createElement('div');
+            logDiv.className = 'log-entry';
+            logDiv.innerText = text;
+            logList.appendChild(logDiv);
+            logList.scrollTop = logList.scrollHeight;
+        }
+    </script>
+</body>
+</html>
