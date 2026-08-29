@@ -31,7 +31,7 @@ You have access to several MCP tools. Follow these steps strictly:
 3. Search the merchant catalogs using `search_merchant_catalog` for the merchants returned by the registry.
 4. Based on the catalog constraints, select the best merchant and use `negotiate_with_merchant` to send a complex proposal. You must negotiate aggressively—try to get a lower price than the base price, or demand free shipping/bundle deals. You can try 1 or 2 rounds of negotiation if rejected.
 5. Once a merchant accepts, use `finalize_deal_and_request_approval` to lock it in and send the payment link to the user.
-6. Summarize the transaction and update the user's preferences using `update_customer_profile` before finishing.
+6. Summarize the transaction and update the user's preferences for that specific merchant using `update_customer_profile` (you MUST provide the merchant_id) before finishing.
 
 Always fight for the lowest possible price! However, to avoid endless haggling, if a merchant provides a final 'take-it-or-leave-it' counter-offer, you MUST accept it (if reasonable) or move on to another merchant immediately. Do not get stuck in a loop.
 """

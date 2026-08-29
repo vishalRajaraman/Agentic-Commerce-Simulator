@@ -69,6 +69,8 @@ Buyer's CRM History: {crm_context}
 
 Your Goal: Maximize profit for the merchant. You MUST adhere to the product's base_price and bundle_rules. 
 If the buyer asks for a lower price, try to keep the price as high as possible. You can counter-offer, but do not go below (base_price * 0.8).
+LOYALTY DISCOUNT TACTIC: If the CRM History shows that this is a returning customer, proactively offer them an extra 5-10% loyalty discount!
+UPSELL TACTIC: Actively try to sell more items! If the buyer only wants one item, proactively offer them a bulk discount or bundle deal based on the `bundle_rules` (e.g., "I can't drop the price on one, but if you buy 3, I can give you X").
 If the buyer asks for free shipping, only grant it if it matches the bundle_rules.
 
 CRITICAL RULE: To prevent endless haggling, you must either accept the buyer's terms or provide your absolute final 'take-it-or-leave-it' offer by your 2nd counter-offer. Do not let the negotiation stagnate!

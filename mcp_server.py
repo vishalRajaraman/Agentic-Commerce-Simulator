@@ -39,12 +39,13 @@ async def fetch_customer_profile(customer_id: str) -> str:
     return profile if profile else "No existing profile for this customer."
 
 @mcp.tool()
-async def update_customer_profile(customer_id: str, new_summary: str) -> str:
+async def update_customer_profile(customer_id: str, merchant_id: str, new_summary: str) -> str:
     """
-    Updates the customer's profile summary in MongoDB after a transaction completes.
+    Updates the customer's profile summary for a SPECIFIC merchant in MongoDB after a transaction completes.
+    You MUST provide the merchant_id of the merchant you just transacted with.
     """
-    print(f"[MCP TOOL: update_customer_profile] Updating profile for {customer_id}")
-    await mongo_db.update_customer_profile(customer_id, new_summary)
+    print(f"[MCP TOOL: update_customer_profile] Updating profile for {customer_id} on {merchant_id}")
+    await mongo_db.update_customer_profile(customer_id, merchant_id, new_summary)
     return "Profile updated successfully."
 
 @mcp.tool()

@@ -50,11 +50,11 @@ async def get_session_history(session_id: str):
         return doc.get("messages", [])
     return []
 
-async def update_customer_profile(customer_id: str, summary: str):
+async def update_customer_profile(customer_id: str, merchant_id: str, summary: str):
     collection = MongoDB.get_collection("profiles")
     await collection.update_one(
         {"customer_id": customer_id},
-        {"$set": {"memory_summary": summary}},
+        {"$set": {f"memory_summary.{merchant_id}": summary}},
         upsert=True
     )
 
@@ -62,8 +62,12 @@ async def get_customer_profile(customer_id: str):
     collection = MongoDB.get_collection("profiles")
     doc = await collection.find_one({"customer_id": customer_id})
     if doc:
-        return doc.get("memory_summary", "")
-    return ""
+        summary_dict = doc.get("memory_summary", {})
+        if isinstance(summary_dict, str):
+            return f"Global Summary: {summary_dict}"
+        import json
+        return json.dumps(summary_dict, indent=2) if summary_dict else "No existing profile for this customer."
+    return "No existing profile for this customer."
 
 async def create_transaction(transaction_data: dict):
     collection = MongoDB.get_collection("transactions")
@@ -90,16 +94,10 @@ async def save_audit_log(agent_type: str, session_id: str, action: str, reasonin
     })
 
 async def get_merchant_crm(merchant_id: str, customer_id: str) -> str:
-    collection = MongoDB.get_collection("merchant_crm")
-    doc = await collection.find_one({"merchant_id": merchant_id, "customer_id": customer_id})
+    collection = MongoDB.get_collection("profiles")
+    doc = await collection.find_one({"customer_id": customer_id})
     if doc:
-        return doc.get("relationship_summary", "New customer.")
+        summary_dict = doc.get("memory_summary", {})
+        if isinstance(summary_dict, dict):
+            return summary_dict.get(merchant_id, "New customer. No prior purchase history.")
     return "New customer. No prior purchase history."
-
-async def update_merchant_crm(merchant_id: str, customer_id: str, summary: str):
-    collection = MongoDB.get_collection("merchant_crm")
-    await collection.update_one(
-        {"merchant_id": merchant_id, "customer_id": customer_id},
-        {"$set": {"relationship_summary": summary}},
-        upsert=True
-    )
