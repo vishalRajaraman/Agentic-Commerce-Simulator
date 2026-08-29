@@ -212,6 +212,22 @@
             color: #34d399;
         }
 
+        .sample-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.4rem 0.8rem;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .sample-btn:hover {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -239,6 +255,11 @@
             <div class="chat-input">
                 <input type="text" id="user-input" placeholder="e.g. Find me the best deal on a new laptop..." onkeypress="handleEnter(event)">
                 <button onclick="sendMessage()">Send</button>
+            </div>
+            <div style="padding: 0 1rem 1rem 1rem; display: flex; gap: 0.5rem; overflow-x: auto;">
+                <button class="sample-btn" onclick="document.getElementById('user-input').value='Buy me 2 pairs of black socks'; sendMessage()">Buy 2 pairs of black socks</button>
+                <button class="sample-btn" onclick="document.getElementById('user-input').value='I want the cheapest smartphone available from electronics'; sendMessage()">Cheapest smartphone</button>
+                <button class="sample-btn" onclick="document.getElementById('user-input').value='Find me a good deal on groceries'; sendMessage()">Groceries</button>
             </div>
         </div>
 
@@ -285,20 +306,74 @@
             addMessage(message, 'user');
             inputEl.value = '';
             
+            // Clear logs and show loading
+            const logList = document.getElementById('log-list');
+            logList.innerHTML = '';
             addLog(`> Sending intent to backend: "${message}"`);
+            addLog(`> Thinking... (polling live backend logs every 2s)`);
+            
+            // Generate Session ID
+            const sessionId = crypto.randomUUID().replace(/-/g, '').substring(0, 16);
+            
+            // Start polling
+            const pollInterval = setInterval(() => {
+                fetchLogs(sessionId);
+            }, 2000);
             
             try {
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ customer_id: "vishal_123", intent: message })
+                    body: JSON.stringify({ customer_id: "vishal_123", intent: message, session_id: sessionId })
                 });
                 const data = await res.json();
                 addMessage(data.reply, 'agent');
-                addLog(`> Agent responded.`);
+                addLog(`> Agent responded. Transaction complete.`);
             } catch (error) {
                 console.error(error);
                 addMessage("Error communicating with agent backend.", 'agent');
+            } finally {
+                clearInterval(pollInterval);
+                fetchLogs(sessionId); // One final fetch
+            }
+        }
+
+        async function fetchLogs(sessionId) {
+            try {
+                const res = await fetch(`/api/logs/${sessionId}`);
+                const data = await res.json();
+                const logList = document.getElementById('log-list');
+                
+                if (data.logs && data.logs.length > 0) {
+                    logList.innerHTML = ''; // clear and rebuild
+                    data.logs.forEach(log => {
+                        let text = `[${log.agent_type.toUpperCase()}] ${log.action}\n`;
+                        if (log.reasoning) text += `Reasoning: ${log.reasoning}\n`;
+                        
+                        if (log.payload && Object.keys(log.payload).length > 0) {
+                            if (log.payload.tool_calls && log.payload.tool_calls.length > 0) {
+                                log.payload.tool_calls.forEach(tc => {
+                                    if (tc.name === 'query_registry') {
+                                        text += `=> TOOL CALL: query_registry("${tc.args.user_query}")\n`;
+                                    } else if (tc.name === 'search_merchant_catalog') {
+                                        text += `=> TOOL CALL: search_merchant_catalog\n   Target: ${tc.args.merchant_id}\n   Query: "${tc.args.query}"\n`;
+                                    } else if (tc.name === 'negotiate_with_merchant') {
+                                        text += `=> TOOL CALL: negotiate_with_merchant\n   Target: ${tc.args.merchant_id}\n   Proposed Terms: "${tc.args.proposed_terms}"\n`;
+                                    } else {
+                                        text += `=> TOOL CALL: ${tc.name}\n`;
+                                    }
+                                });
+                            } else if (log.action === "negotiation_response") {
+                                text += `=> MERCHANT RESPONSE:\n   Status: ${log.payload.status.toUpperCase()}\n   Final Terms: "${log.payload.final_terms}"\n   Message: "${log.payload.message}"\n`;
+                            } else {
+                                text += `=> Payload: ${JSON.stringify(log.payload, null, 2)}`;
+                            }
+                        }
+                        addLog(text);
+                    });
+                }
+            } catch (error) {
+                console.error("Failed to fetch logs:", error);
             }
         }
 

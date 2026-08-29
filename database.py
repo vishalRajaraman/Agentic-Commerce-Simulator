@@ -45,6 +45,25 @@ def init_db():
         # Upsert into Pinecone Vector DB ONLY upon seeding the DB
         print("Seeding local database and upserting vectors to Pinecone...")
         vector_store.upsert_merchants(merchants_data)
+        
+        products_data = [
+            {
+                "product_id": "prod_001_socks",
+                "merchant_id": "merchant_004_clothing",
+                "description": "High-quality black cotton socks",
+                "base_price": 20.0,
+                "bundle_rules": "Buy 2 for $35"
+            },
+            {
+                "product_id": "prod_002_socks",
+                "merchant_id": "merchant_005_clothing",
+                "description": "Premium black socks",
+                "base_price": 22.0,
+                "bundle_rules": "Free shipping over $40"
+            }
+        ]
+        print("Seeding mock products into Pinecone...")
+        vector_store.upsert_products(products_data)
     
     conn.close()
 

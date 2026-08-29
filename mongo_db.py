@@ -77,3 +77,29 @@ async def update_transaction_status(transaction_id: str, status: str):
         {"_id": ObjectId(transaction_id)},
         {"$set": {"status": status}}
     )
+
+async def save_audit_log(agent_type: str, session_id: str, action: str, reasoning: str, payload: dict):
+    collection = MongoDB.get_collection("audit_logs")
+    await collection.insert_one({
+        "agent_type": agent_type,
+        "session_id": session_id,
+        "action": action,
+        "reasoning": reasoning,
+        "payload": payload,
+        "timestamp": __import__('datetime').datetime.utcnow()
+    })
+
+async def get_merchant_crm(merchant_id: str, customer_id: str) -> str:
+    collection = MongoDB.get_collection("merchant_crm")
+    doc = await collection.find_one({"merchant_id": merchant_id, "customer_id": customer_id})
+    if doc:
+        return doc.get("relationship_summary", "New customer.")
+    return "New customer. No prior purchase history."
+
+async def update_merchant_crm(merchant_id: str, customer_id: str, summary: str):
+    collection = MongoDB.get_collection("merchant_crm")
+    await collection.update_one(
+        {"merchant_id": merchant_id, "customer_id": customer_id},
+        {"$set": {"relationship_summary": summary}},
+        upsert=True
+    )

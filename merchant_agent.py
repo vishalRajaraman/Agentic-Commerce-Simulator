@@ -1,61 +1,125 @@
-import random
+import os
 import uuid
+import json
+from openai import OpenAI
+from auth_layer import verify_payload
+import mongo_db
 
-class MockMerchantAgent:
-    def __init__(self, merchant_id: str, category: str):
+# Initialize OpenAI client with NVIDIA endpoint
+client = OpenAI(
+  base_url="https://integrate.api.nvidia.com/v1",
+  api_key=os.getenv("NIM_API_KEY", "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")
+)
+
+class MerchantAgent:
+    def __init__(self, merchant_id: str):
         self.merchant_id = merchant_id
-        self.category = category
         
-        # Base prices depend on category
-        if "electronics" in category:
-            self.base_price = random.randint(300, 1000)
-        elif "clothing" in category:
-            self.base_price = random.randint(20, 100)
-        else:
-            self.base_price = random.randint(10, 50)
+        # We store conversational memory for active sessions
+        # In a real app, this might be backed by Redis or MongoDB
+        self.session_memory = {}
+
+    async def _get_llm_response(self, session_id: str, system_prompt: str, user_message: str) -> tuple[str, str]:
+        if session_id not in self.session_memory:
+            self.session_memory[session_id] = [{"role": "system", "content": system_prompt}]
             
-        self.floor_price = int(self.base_price * 0.8) # Will not go below 80%
+        self.session_memory[session_id].append({"role": "user", "content": user_message})
+        
+        # The user requested openai/gpt-oss-120b but Nvidia might map it to their specific model strings
+        # We will use the standard endpoint call
+        completion = client.chat.completions.create(
+            model="openai/gpt-oss-120b", # wait, nvidia doesn't have this exact name, but user provided it in the snippet
+            messages=self.session_memory[session_id],
+            temperature=0.7,
+            top_p=1,
+            max_tokens=1024,
+            stream=False
+        )
+        
+        response_text = completion.choices[0].message.content
+        reasoning = getattr(completion.choices[0].message, "reasoning_content", "No reasoning provided.")
+        
+        self.session_memory[session_id].append({"role": "assistant", "content": response_text})
+        
+        return response_text, reasoning
 
-    def process_rfq(self, item_description: str) -> dict:
+    async def negotiate(self, ap2_token: str) -> dict:
         """
-        Handle the initial RFQ from the Buyer Agent.
+        Handle a complex negotiation offer from the Buyer Agent.
+        Requires a signed AP2 token payload.
         """
-        return {
-            "merchant_id": self.merchant_id,
-            "status": "quote_offered",
-            "quoted_price": self.base_price,
-            "message": f"We have '{item_description}' in stock. Our initial price is ${self.base_price}."
-        }
-        
-    def negotiate(self, proposed_price: float) -> dict:
-        """
-        Handle a counter-offer from the Buyer Agent.
-        """
-        if proposed_price >= self.base_price:
-            return {"status": "accepted", "final_price": proposed_price, "message": "Deal! We accept your offer."}
-        
-        if proposed_price >= self.floor_price:
-            # Maybe accept, or maybe counter somewhere in between
-            if random.random() > 0.5:
-                return {"status": "accepted", "final_price": proposed_price, "message": "You drive a hard bargain, but we accept."}
-            else:
-                counter = int((proposed_price + self.base_price) / 2)
-                self.base_price = counter # Lower our internal base price expectation
-                return {"status": "counter_offer", "quoted_price": counter, "message": f"We can't do ${proposed_price}, but we can meet at ${counter}."}
-        
-        return {"status": "rejected", "message": f"Sorry, ${proposed_price} is too low. Our absolute best is ${self.floor_price}."}
+        try:
+            # 1. Verify AP2 Handshake
+            decoded = verify_payload(ap2_token)
+            buyer_id = decoded["agent_id"]
+            payload = decoded["payload"]
+            proposed_terms = payload.get("proposed_terms")
+            product = payload.get("product")
+            session_id = payload.get("session_id", str(uuid.uuid4()))
+            
+            # 2. Fetch CRM Context
+            crm_context = await mongo_db.get_merchant_crm(self.merchant_id, buyer_id)
+            
+            # 3. Construct System Prompt
+            system_prompt = f"""You are an autonomous Merchant Agent for {self.merchant_id}.
+You are negotiating a deal for the following product:
+{json.dumps(product, indent=2)}
 
-    def generate_razorpay_link(self, final_price: float) -> str:
+Buyer's CRM History: {crm_context}
+
+Your Goal: Maximize profit for the merchant. You MUST adhere to the product's base_price and bundle_rules. 
+If the buyer asks for a lower price, try to keep the price as high as possible. You can counter-offer, but do not go below (base_price * 0.8).
+If the buyer asks for free shipping, only grant it if it matches the bundle_rules.
+
+CRITICAL RULE: To prevent endless haggling, you must either accept the buyer's terms or provide your absolute final 'take-it-or-leave-it' offer by your 2nd counter-offer. Do not let the negotiation stagnate!
+
+You MUST respond in JSON format with exactly three fields:
+- "status": "accepted", "rejected", or "counter_offer"
+- "final_terms": a string summarizing the agreed or countered terms
+- "message": a natural language message to the buyer
+"""
+            
+            # 4. Generate LLM Response
+            user_message = f"Buyer proposes: {proposed_terms}"
+            response_text, reasoning = await self._get_llm_response(session_id, system_prompt, user_message)
+            
+            # Parse the JSON response
+            try:
+                # simple cleanup in case LLM wraps in markdown
+                clean_text = response_text.replace("```json", "").replace("```", "").strip()
+                response_json = json.loads(clean_text)
+            except json.JSONDecodeError:
+                response_json = {
+                    "status": "counter_offer",
+                    "final_terms": "pending",
+                    "message": response_text
+                }
+            
+            # 5. Audit Logging
+            await mongo_db.save_audit_log(
+                agent_type="merchant_agent",
+                session_id=session_id,
+                action="negotiation_response",
+                reasoning=reasoning,
+                payload=response_json
+            )
+            
+            return response_json
+            
+        except Exception as e:
+            return {"status": "error", "message": f"Negotiation failed: {str(e)}"}
+
+    def generate_razorpay_link(self, final_terms: str) -> str:
         """
-        Simulate generating a Razorpay payment link after deal is finalized.
+        Simulate generating a Razorpay payment link.
         """
         mock_payment_id = uuid.uuid4().hex[:8]
-        return f"https://rzp.io/i/{mock_payment_id}?amount={final_price}"
+        return f"https://rzp.io/i/{mock_payment_id}?terms={final_terms.replace(' ', '_')}"
 
-# Global registry of mock merchants for testing
-ACTIVE_MOCK_MERCHANTS = {}
+# Global registry of merchant agents
+ACTIVE_MERCHANT_AGENTS = {}
 
-def get_merchant_agent(merchant_id: str, category: str = "general") -> MockMerchantAgent:
-    if merchant_id not in ACTIVE_MOCK_MERCHANTS:
-        ACTIVE_MOCK_MERCHANTS[merchant_id] = MockMerchantAgent(merchant_id, category)
-    return ACTIVE_MOCK_MERCHANTS[merchant_id]
+def get_merchant_agent(merchant_id: str) -> MerchantAgent:
+    if merchant_id not in ACTIVE_MERCHANT_AGENTS:
+        ACTIVE_MERCHANT_AGENTS[merchant_id] = MerchantAgent(merchant_id)
+    return ACTIVE_MERCHANT_AGENTS[merchant_id]

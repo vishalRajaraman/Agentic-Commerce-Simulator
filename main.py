@@ -3,9 +3,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from datetime import datetime, timezone
 
+from typing import Optional
+
 class ChatRequest(BaseModel):
     customer_id: str
     intent: str
+    session_id: Optional[str] = None
 import os
 
 import database
@@ -55,8 +58,27 @@ async def chat_endpoint(req: ChatRequest):
     """
     Endpoint for the web UI to interact with the agent.
     """
-    response = await process_user_intent(req.customer_id, req.intent)
-    return {"reply": response}
+    reply, session_id = await process_user_intent(req.customer_id, req.intent, req.session_id)
+    return {"reply": reply, "session_id": session_id}
+
+@app.get("/api/logs/{session_id}")
+async def get_logs(session_id: str):
+    """
+    Fetch all audit logs for a given session from MongoDB.
+    """
+    if MongoDB.db is None:
+        MongoDB.connect()
+    
+    logs_cursor = MongoDB.db.audit_logs.find({"session_id": session_id}).sort("timestamp", 1)
+    
+    formatted_logs = []
+    async for log in logs_cursor:
+        log["_id"] = str(log["_id"])
+        if "timestamp" in log and log["timestamp"]:
+            log["timestamp"] = log["timestamp"].isoformat()
+        formatted_logs.append(log)
+            
+    return {"logs": formatted_logs}
 
 
 @app.post("/api/registry/search", response_model=X402Message)
