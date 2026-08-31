@@ -284,11 +284,7 @@
                             </tr>
                         </thead>
                         <tbody id="order-table-body">
-                            <tr>
-                                <td>Sony Headphones</td>
-                                <td>Tech Haven</td>
-                                <td><span class="status-badge">Paid</span></td>
-                            </tr>
+                            <!-- Dynamically populated -->
                         </tbody>
                     </table>
                 </div>
@@ -335,6 +331,7 @@
             } finally {
                 clearInterval(pollInterval);
                 fetchLogs(sessionId); // One final fetch
+                fetchOrders('vishal_123'); // Refresh orders table
             }
         }
 
@@ -398,6 +395,34 @@
             logList.appendChild(logDiv);
             logList.scrollTop = logList.scrollHeight;
         }
+
+        async function fetchOrders(customerId) {
+            try {
+                const res = await fetch(`/api/orders/${customerId}`);
+                const data = await res.json();
+                const tbody = document.getElementById('order-table-body');
+                tbody.innerHTML = '';
+                if (data.orders && data.orders.length > 0) {
+                    data.orders.forEach(order => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${order.item_description}</td>
+                            <td>${order.merchant_id}</td>
+                            <td><span class="status-badge">${order.status}</span></td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--text-muted);">No recent orders</td></tr>';
+                }
+            } catch (error) {
+                console.error("Failed to fetch orders:", error);
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            fetchOrders('vishal_123');
+        });
     </script>
 </body>
 </html>

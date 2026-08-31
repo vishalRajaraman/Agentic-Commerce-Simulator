@@ -26,10 +26,10 @@ llm = ChatOpenAI(
 system_prompt = """
 You are a powerful autonomous Buyer Agent. Your job is to find the absolute best deal for the user by negotiating aggressively with multiple merchants.
 You have access to several MCP tools. Follow these steps strictly:
-1. Use `fetch_customer_profile` to get any preferences for the user.
-2. Use `query_registry` with the user's intent to query the central vector database and retrieve the interaction endpoints of relevant merchants.
-3. Search the merchant catalogs using `search_merchant_catalog` for the merchants returned by the registry.
-4. Based on the catalog constraints, select the best merchant and use `negotiate_with_merchant` to send a complex proposal. You must negotiate aggressively—try to get a lower price than the base price, or demand free shipping/bundle deals. You can try 1 or 2 rounds of negotiation if rejected.
+1. Use `query_registry` with the user's intent to query the central vector database and retrieve the interaction endpoints of relevant merchants.
+2. Search the merchant catalogs using `search_merchant_catalog` for the merchants returned by the registry.
+3. Use `fetch_merchant_context` to fetch the past negotiation history and preferences specific to the selected merchant.
+4. Based on the catalog constraints and the merchant context, select the best merchant and use `negotiate_with_merchant` to send a complex proposal. You must negotiate aggressively—try to get a lower price than the base price, or demand free shipping/bundle deals. You can try 1 or 2 rounds of negotiation if rejected.
 5. Once a merchant accepts, use `finalize_deal_and_request_approval` to lock it in and send the payment link to the user.
 6. Summarize the transaction and update the user's preferences for that specific merchant using `update_customer_profile` (you MUST provide the merchant_id) before finishing.
 
@@ -60,34 +60,41 @@ async def process_user_intent(customer_id: str, intent: str, session_id: str = N
                 if mongo_db.MongoDB.db is None:
                     mongo_db.MongoDB.connect()
                 
-                # Run the agent
+                # Run the agent in streaming mode for real-time logs
                 session_id = session_id or os.urandom(8).hex()
-                response = await agent_executor.ainvoke({
-                    "messages": [("user", f"User ID: {customer_id}. User wants: {intent}. Negotiation Session ID: {session_id}")]
-                })
+                final_response = ""
                 
-                # Extract and log the Buyer Agent's reasoning from the AIMessages
-                for msg in response.get("messages", []):
-                    if isinstance(msg, AIMessage):
-                        # Construct the reasoning text
-                        reasoning_text = ""
-                        if msg.content:
-                            reasoning_text += str(msg.content)
-                        if hasattr(msg, "additional_kwargs") and "reasoning_content" in msg.additional_kwargs:
-                            reasoning_text += f"\n[Internal Reasoning]: {msg.additional_kwargs['reasoning_content']}"
-                        
-                        tool_calls = msg.tool_calls if hasattr(msg, "tool_calls") else []
-                        
-                        if reasoning_text or tool_calls:
-                            await mongo_db.save_audit_log(
-                                agent_type="buyer_agent",
-                                session_id=session_id,
-                                action="decision_step",
-                                reasoning=reasoning_text.strip(),
-                                payload={"tool_calls": tool_calls}
-                            )
+                async for chunk in agent_executor.astream(
+                    {"messages": [("user", f"User ID: {customer_id}. User wants: {intent}. Negotiation Session ID: {session_id}")]},
+                    stream_mode="updates"
+                ):
+                    for node_name, state_update in chunk.items():
+                        if "messages" in state_update:
+                            messages = state_update["messages"]
+                            if not isinstance(messages, list):
+                                messages = [messages]
+                            
+                            for msg in messages:
+                                if isinstance(msg, AIMessage):
+                                    reasoning_text = ""
+                                    if msg.content:
+                                        reasoning_text += str(msg.content)
+                                        final_response = str(msg.content)
+                                    if hasattr(msg, "additional_kwargs") and "reasoning_content" in msg.additional_kwargs:
+                                        reasoning_text += f"\n[Internal Reasoning]: {msg.additional_kwargs['reasoning_content']}"
+                                    
+                                    tool_calls = msg.tool_calls if hasattr(msg, "tool_calls") else []
+                                    
+                                    if reasoning_text or tool_calls:
+                                        await mongo_db.save_audit_log(
+                                            agent_type="buyer_agent",
+                                            session_id=session_id,
+                                            action="decision_step",
+                                            reasoning=reasoning_text.strip(),
+                                            payload={"tool_calls": tool_calls}
+                                        )
                 
-                return response['messages'][-1].content, session_id
+                return final_response, session_id
     except Exception as e:
         import traceback
         traceback.print_exc()

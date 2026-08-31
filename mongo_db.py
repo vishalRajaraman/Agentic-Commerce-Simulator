@@ -82,6 +82,15 @@ async def update_transaction_status(transaction_id: str, status: str):
         {"$set": {"status": status}}
     )
 
+async def get_customer_transactions(customer_id: str):
+    collection = MongoDB.get_collection("transactions")
+    cursor = collection.find({"customer_id": customer_id}).sort("_id", -1)
+    orders = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        orders.append(doc)
+    return orders
+
 async def save_audit_log(agent_type: str, session_id: str, action: str, reasoning: str, payload: dict):
     collection = MongoDB.get_collection("audit_logs")
     await collection.insert_one({

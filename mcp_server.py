@@ -20,23 +20,35 @@ def query_registry(user_query: str) -> List[Dict]:
     return database.search_merchants_by_category(user_query)
 
 @mcp.tool()
-def search_merchant_catalog(merchant_id: str, query: str) -> List[Dict]:
+def search_merchant_catalog(merchant_id: str, query: str) -> str:
     """
     Search a specific merchant's catalog for products matching the query.
-    Returns the top matching items and their constraints (base_price, bundle_rules).
+    Returns the top matching items in a readable YAML format.
     """
     print(f"[MCP TOOL: search_merchant_catalog] Searching {merchant_id} for '{query}'")
     results = vector_store.search_merchant_catalog(merchant_id, query)
-    return results
+    
+    import yaml
+    
+    yaml_data = {"products": []}
+    for item in results:
+        product = {
+            "id": item.get("product_id", ""),
+            "description": item.get("description", ""),
+            "base_price": item.get("base_price", ""),
+            "bundle_rules": item.get("bundle_rules", "")
+        }
+        yaml_data["products"].append(product)
+        
+    return yaml.dump(yaml_data, sort_keys=False)
 
 @mcp.tool()
-async def fetch_customer_profile(customer_id: str) -> str:
+async def fetch_merchant_context(customer_id: str, merchant_id: str) -> str:
     """
-    Fetch the summarized customer profile (long-term memory) from MongoDB.
+    Fetch the summarized customer profile (long-term memory) for a specific merchant from MongoDB.
     """
-    print(f"[MCP TOOL: fetch_customer_profile] Fetching profile for {customer_id}")
-    profile = await mongo_db.get_customer_profile(customer_id)
-    return profile if profile else "No existing profile for this customer."
+    print(f"[MCP TOOL: fetch_merchant_context] Fetching profile for {customer_id} with merchant {merchant_id}")
+    return await mongo_db.get_merchant_crm(merchant_id, customer_id)
 
 @mcp.tool()
 async def update_customer_profile(customer_id: str, merchant_id: str, new_summary: str) -> str:
@@ -81,6 +93,15 @@ async def finalize_deal_and_request_approval(customer_id: str, merchant_id: str,
     print(f"[MCP TOOL: finalize_deal] Finalizing deal with {merchant_id} on terms: {final_terms}")
     agent = get_merchant_agent(merchant_id)
     payment_link = agent.generate_razorpay_link(final_terms)
+    
+    transaction_data = {
+        "customer_id": customer_id,
+        "merchant_id": merchant_id,
+        "item_description": item_description,
+        "final_terms": final_terms,
+        "status": "Paid"
+    }
+    await mongo_db.create_transaction(transaction_data)
     
     msg = f"DEAL FINALIZED! {item_description} from {merchant_id}.\nTerms: {final_terms}\nPlease pay here: {payment_link}"
     print(f"\n--- MOCK TWILIO MESSAGE TO {customer_id} ---\n{msg}\n---------------------------------------\n")

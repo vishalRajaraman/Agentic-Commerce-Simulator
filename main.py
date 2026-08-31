@@ -12,6 +12,7 @@ class ChatRequest(BaseModel):
 import os
 
 import database
+import mongo_db
 from mongo_db import MongoDB
 from models import X402Message, X402Metadata, RegistryResponsePayload, MerchantMatch, MerchantEndpoint
 from buyer_agent import process_user_intent
@@ -80,7 +81,15 @@ async def get_logs(session_id: str):
             
     return {"logs": formatted_logs}
 
-
+@app.get("/api/orders/{customer_id}")
+async def get_orders(customer_id: str):
+    """
+    Fetch all persistent transactions for a user.
+    """
+    if MongoDB.db is None:
+        MongoDB.connect()
+    orders = await mongo_db.get_customer_transactions(customer_id)
+    return {"orders": orders}
 @app.post("/api/registry/search", response_model=X402Message)
 async def registry_search(request_payload: X402Message):
     # The incoming request should have intent="registry_search" and payload={"query": "..."}
