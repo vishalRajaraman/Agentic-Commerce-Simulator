@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv()
+
 class ChatRequest(BaseModel):
     customer_id: str
     intent: str
@@ -34,6 +37,16 @@ async def startup_event():
 async def shutdown_event():
     MongoDB.disconnect()
 
+async def process_and_reply_twilio(customer_id: str, user_intent: str):
+    print(f"[Background Task] Starting process_and_reply_twilio for {customer_id}")
+    from mcp_server import send_twilio_message
+    reply, session_id = await process_user_intent(customer_id, user_intent)
+    if reply:
+        print(f"[Background Task] Sending reply: {reply}")
+        send_twilio_message(customer_id, reply)
+    else:
+        print("[Background Task] No reply generated.")
+
 @app.post("/twilio/whatsapp")
 async def twilio_whatsapp_webhook(
     Body: str = Form(...),
@@ -45,10 +58,29 @@ async def twilio_whatsapp_webhook(
     We process the intent in the background so Twilio doesn't time out.
     """
     customer_id = From.replace("whatsapp:", "")
-    user_intent = Body
+    user_intent = Body.strip()
     
-    # Run the buyer agent processing in the background
-    background_tasks.add_task(process_user_intent, customer_id, user_intent)
+    print(f"=== Received Twilio Webhook ===")
+    print(f"From: {From} -> Customer ID: {customer_id}")
+    print(f"Body: {user_intent}")
+    
+    # Check if the user is confirming a payment
+    from mongo_db import get_customer_transactions, update_transaction_status
+    from mcp_server import send_twilio_message
+    
+    transactions = await get_customer_transactions(customer_id)
+    if transactions:
+        latest_tx = transactions[0] # They are sorted by _id desc
+        if latest_tx.get("status") == "Pending Payment" and user_intent.lower() in ["yes", "y", "ok", "sure", "pay"]:
+            # Mock payment processing
+            await update_transaction_status(latest_tx["_id"], "Paid")
+            msg = f"Payment Successful for {latest_tx.get('item_description', 'your order')}! Your transaction ID is {latest_tx['_id']}. The merchant will ship it shortly."
+            send_twilio_message(customer_id, msg)
+            from fastapi.responses import Response
+            return Response(content='<Response></Response>', media_type="application/xml")
+
+    # Run the buyer agent processing and reply in the background
+    background_tasks.add_task(process_and_reply_twilio, customer_id, user_intent)
     
     # Twilio requires valid TwiML response. We return empty TwiML since the agent will reply via API later.
     from fastapi.responses import Response

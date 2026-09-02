@@ -15,7 +15,8 @@ class MongoDB:
     @classmethod
     def connect(cls):
         try:
-            cls.client = AsyncIOMotorClient(MONGO_URI)
+            import certifi
+            cls.client = AsyncIOMotorClient(MONGO_URI, tlsCAFile=certifi.where(), tlsAllowInvalidCertificates=True)
             cls.db = cls.client.agentic_commerce
             print(f"Connected to MongoDB at {MONGO_URI}")
         except Exception as e:

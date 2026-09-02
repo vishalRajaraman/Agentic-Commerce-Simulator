@@ -6,6 +6,20 @@ import vector_store
 from auth_layer import sign_payload
 from merchant_agent import get_merchant_agent
 import asyncio
+import os
+from dotenv import load_dotenv
+load_dotenv()
+from twilio.rest import Client
+
+# Twilio Client Initialization
+twilio_client = None
+try:
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    if account_sid and auth_token:
+        twilio_client = Client(account_sid, auth_token)
+except Exception as e:
+    print(f"Twilio initialization failed: {e}")
 
 # Initialize FastMCP Server on port 8001 to avoid conflicting with FastAPI on 8000
 mcp = FastMCP("AgenticCommerceTools", port=8001)
@@ -85,6 +99,31 @@ async def negotiate_with_merchant(customer_id: str, merchant_id: str, session_id
     return response
 
 @mcp.tool()
+def send_twilio_message(to_number: str, body: str) -> str:
+    """
+    Sends a WhatsApp message to the user via Twilio.
+    """
+    if not twilio_client:
+        print(f"\n--- MOCK TWILIO MESSAGE TO {to_number} ---\n{body}\n---------------------------------------\n")
+        return "Twilio not configured. Message mocked."
+    
+    from_number = os.getenv("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")
+    if not to_number.startswith("whatsapp:"):
+        to_number = f"whatsapp:{to_number}"
+        
+    try:
+        message = twilio_client.messages.create(
+            from_=from_number,
+            body=body,
+            to=to_number
+        )
+        print(f"[Twilio] Sent message SID {message.sid} to {to_number}")
+        return f"Message sent successfully with SID {message.sid}"
+    except Exception as e:
+        print(f"[Twilio Error] {e}")
+        return f"Failed to send message: {e}"
+
+@mcp.tool()
 async def finalize_deal_and_request_approval(customer_id: str, merchant_id: str, final_terms: str, item_description: str) -> str:
     """
     Finalizes the deal with the merchant, asks the merchant to generate a Razorpay link,
@@ -99,12 +138,18 @@ async def finalize_deal_and_request_approval(customer_id: str, merchant_id: str,
         "merchant_id": merchant_id,
         "item_description": item_description,
         "final_terms": final_terms,
-        "status": "Paid"
+        "status": "Pending Payment"
     }
     await mongo_db.create_transaction(transaction_data)
     
-    msg = f"DEAL FINALIZED! {item_description} from {merchant_id}.\nTerms: {final_terms}\nPlease pay here: {payment_link}"
-    print(f"\n--- MOCK TWILIO MESSAGE TO {customer_id} ---\n{msg}\n---------------------------------------\n")
+    msg = (
+        f"✅ *DEAL FINALIZED!*\n\n"
+        f"🛒 *Item:* {item_description}\n"
+        f"🏪 *Merchant:* {merchant_id}\n"
+        f"📋 *Terms:* {final_terms}\n\n"
+        f"💳 *Please pay here to confirm:* \n{payment_link}"
+    )
+    send_twilio_message(customer_id, msg)
     
     return f"Deal finalized. Payment link generated and sent to user: {payment_link}"
 

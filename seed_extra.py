@@ -9,10 +9,24 @@ products_data = [
         "bundle_rules": "Include free protective case if price > $550"
     },
     {
+        "product_id": "prod_101_phone_alt",
+        "merchant_id": "merchant_002_electronics",
+        "description": "Latest 5G Smartphone with 128GB storage (Alt)",
+        "base_price": 580.0,
+        "bundle_rules": "Include free screen protector"
+    },
+    {
         "product_id": "prod_102_phone",
         "merchant_id": "merchant_002_electronics",
         "description": "Budget 4G Smartphone",
         "base_price": 200.0,
+        "bundle_rules": "No bundle rules"
+    },
+    {
+        "product_id": "prod_102_phone_alt",
+        "merchant_id": "merchant_001_electronics",
+        "description": "Budget 4G Smartphone (Alt)",
+        "base_price": 190.0,
         "bundle_rules": "No bundle rules"
     },
     {
@@ -21,6 +35,13 @@ products_data = [
         "description": "Premium Arabica Coffee Beans 1kg",
         "base_price": 30.0,
         "bundle_rules": "Buy 3 for $75"
+    },
+    {
+        "product_id": "prod_201_coffee_alt",
+        "merchant_id": "merchant_006_groceries",
+        "description": "Premium Arabica Coffee Beans 1kg (Alt)",
+        "base_price": 28.0,
+        "bundle_rules": "Buy 3 for $80"
     }
 ]
 

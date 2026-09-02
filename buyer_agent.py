@@ -2,6 +2,8 @@ import asyncio
 import os
 import sys
 import json
+from dotenv import load_dotenv
+load_dotenv()
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from mcp import ClientSession
