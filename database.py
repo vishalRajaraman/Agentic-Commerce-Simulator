@@ -24,17 +24,17 @@ def init_db():
     if count == 0:
         merchants_data = [
             # Electronics
-            ("merchant_001_electronics", "Electro World", "electronics, laptops, smartphones", "/api/merchant/merchant_001_electronics/interact"),
-            ("merchant_002_electronics", "Tech Haven", "electronics, gadgets, accessories", "/api/merchant/merchant_002_electronics/interact"),
-            ("merchant_003_electronics", "Gizmo Hub", "electronics, smart home, audio", "/api/merchant/merchant_003_electronics/interact"),
+            ("merchant_001_electronics", "Electro World", "electronics, laptops, smartphones", "http://localhost:8002/api/merchant/merchant_001_electronics/interact"),
+            ("merchant_002_electronics", "Tech Haven", "electronics, gadgets, accessories", "http://localhost:8002/api/merchant/merchant_002_electronics/interact"),
+            ("merchant_003_electronics", "Gizmo Hub", "electronics, smart home, audio", "http://localhost:8002/api/merchant/merchant_003_electronics/interact"),
             
             # Clothing
-            ("merchant_004_clothing", "Fashion Forward", "clothing, apparel, fashion", "/api/merchant/merchant_004_clothing/interact"),
-            ("merchant_005_clothing", "Urban Wear", "clothing, streetwear, shoes", "/api/merchant/merchant_005_clothing/interact"),
+            ("merchant_004_clothing", "Fashion Forward", "clothing, apparel, fashion", "http://localhost:8002/api/merchant/merchant_004_clothing/interact"),
+            ("merchant_005_clothing", "Urban Wear", "clothing, streetwear, shoes", "http://localhost:8002/api/merchant/merchant_005_clothing/interact"),
             
             # Groceries
-            ("merchant_006_groceries", "Fresh Market", "groceries, fresh produce, meat", "/api/merchant/merchant_006_groceries/interact"),
-            ("merchant_007_groceries", "Pantry Essentials", "groceries, dry goods, snacks", "/api/merchant/merchant_007_groceries/interact")
+            ("merchant_006_groceries", "Fresh Market", "groceries, fresh produce, meat", "http://localhost:8002/api/merchant/merchant_006_groceries/interact"),
+            ("merchant_007_groceries", "Pantry Essentials", "groceries, dry goods, snacks", "http://localhost:8002/api/merchant/merchant_007_groceries/interact")
         ]
         cursor.executemany('''
             INSERT INTO merchants (merchant_id, name, category, endpoint_interact)
@@ -90,6 +90,17 @@ def search_merchants_by_category(query: str):
     conn.close()
     
     return results
+
+def get_merchant_endpoint(merchant_id: str) -> str:
+    """Fetch the fully qualified endpoint URL for a given merchant"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT endpoint_interact FROM merchants WHERE merchant_id = ?', (merchant_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return row[0]
+    return ""
 
 if __name__ == "__main__":
     init_db()

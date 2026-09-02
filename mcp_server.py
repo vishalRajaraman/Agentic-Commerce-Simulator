@@ -7,6 +7,7 @@ from auth_layer import sign_payload
 from merchant_agent import get_merchant_agent
 import asyncio
 import os
+import httpx
 from dotenv import load_dotenv
 load_dotenv()
 from twilio.rest import Client
@@ -92,11 +93,19 @@ async def negotiate_with_merchant(customer_id: str, merchant_id: str, session_id
     # Sign payload for AP2 Handshake
     ap2_token = sign_payload(agent_id=customer_id, payload=payload)
     
-    # Send to merchant agent
-    agent = get_merchant_agent(merchant_id)
-    response = await agent.negotiate(ap2_token)
-    
-    return response
+    # Send to merchant agent via network
+    endpoint = database.get_merchant_endpoint(merchant_id)
+    if not endpoint:
+        return {"status": "error", "message": f"Merchant {merchant_id} endpoint not found."}
+        
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(endpoint, json={"ap2_token": ap2_token})
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            print(f"[HTTP Error] Negotiating with {merchant_id}: {e}")
+            return {"status": "error", "message": f"Failed to reach merchant server: {str(e)}"}
 
 @mcp.tool()
 def send_twilio_message(to_number: str, body: str) -> str:
@@ -130,8 +139,19 @@ async def finalize_deal_and_request_approval(customer_id: str, merchant_id: str,
     and then sends that link to the user (via Twilio/UI) for final approval.
     """
     print(f"[MCP TOOL: finalize_deal] Finalizing deal with {merchant_id} on terms: {final_terms}")
-    agent = get_merchant_agent(merchant_id)
-    payment_link = agent.generate_razorpay_link(final_terms)
+    
+    endpoint = database.get_merchant_endpoint(merchant_id)
+    payment_link = f"https://rzp.io/mock?merchant={merchant_id}"
+    
+    if endpoint:
+        generate_link_endpoint = endpoint.replace("/interact", "/generate_link")
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.post(generate_link_endpoint, json={"final_terms": final_terms})
+                resp.raise_for_status()
+                payment_link = resp.json().get("payment_link", payment_link)
+            except Exception as e:
+                print(f"[HTTP Error] Generating link for {merchant_id}: {e}")
     
     transaction_data = {
         "customer_id": customer_id,

@@ -91,6 +91,16 @@ async def chat_endpoint(req: ChatRequest):
     """
     Endpoint for the web UI to interact with the agent.
     """
+    # Check if the user is confirming a payment
+    from mongo_db import get_customer_transactions, update_transaction_status
+    transactions = await get_customer_transactions(req.customer_id)
+    if transactions:
+        latest_tx = transactions[0]
+        if latest_tx.get("status") == "Pending Payment" and req.intent.lower() in ["yes", "y", "ok", "sure", "pay"]:
+            await update_transaction_status(latest_tx["_id"], "Paid")
+            msg = f"Payment Successful for {latest_tx.get('item_description', 'your order')}! Your transaction ID is {latest_tx['_id']}. The merchant will ship it shortly."
+            return {"reply": msg, "session_id": req.session_id}
+
     reply, session_id = await process_user_intent(req.customer_id, req.intent, req.session_id)
     return {"reply": reply, "session_id": session_id}
 
