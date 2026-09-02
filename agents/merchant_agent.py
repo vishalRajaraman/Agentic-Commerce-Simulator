@@ -2,8 +2,8 @@ import os
 import uuid
 import json
 from openai import OpenAI
-from auth_layer import verify_payload
-import mongo_db
+from core.auth_layer import verify_ap2_handshake
+from db import mongo_db
 
 # Initialize OpenAI client with NVIDIA endpoint
 client = OpenAI(
@@ -43,16 +43,23 @@ class MerchantAgent:
         
         return response_text, reasoning
 
-    async def negotiate(self, ap2_token: str) -> dict:
+    async def negotiate(self, ap2_token: dict) -> dict:
         """
         Handle a complex negotiation offer from the Buyer Agent.
-        Requires a signed AP2 token payload.
+        Requires a signed and encrypted AP2 token payload.
         """
         try:
-            # 1. Verify AP2 Handshake
-            decoded = verify_payload(ap2_token)
-            buyer_id = decoded["agent_id"]
-            payload = decoded["payload"]
+            # Load private key for this merchant
+            private_key_path = f"merchant_keys/{self.merchant_id}_private.pem"
+            if not os.path.exists(private_key_path):
+                raise ValueError(f"Private key not found for {self.merchant_id}")
+            with open(private_key_path, "r") as f:
+                merchant_priv = f.read()
+                
+            # 1. Decrypt and Verify AP2 Handshake (PKI)
+            payload = verify_ap2_handshake(merchant_priv, ap2_token)
+            
+            buyer_id = payload.get("customer_id", "unknown_buyer")
             proposed_terms = payload.get("proposed_terms")
             product = payload.get("product")
             session_id = payload.get("session_id", str(uuid.uuid4()))

@@ -21,3 +21,7 @@ registry.db
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# PKI Keys
+*.pem
+merchant_keys

@@ -1,6 +1,12 @@
 import sqlite3
 import os
-import vector_store
+import sys
+
+# Add root directory to sys.path so we can import from db and core
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from db import vector_store
+from core import crypto_utils
 
 DB_PATH = "registry.db"
 
@@ -14,7 +20,8 @@ def init_db():
             merchant_id TEXT PRIMARY KEY,
             name TEXT,
             category TEXT,
-            endpoint_interact TEXT
+            endpoint_interact TEXT,
+            public_key TEXT
         )
     ''')
     
@@ -22,7 +29,7 @@ def init_db():
     cursor.execute('SELECT COUNT(*) FROM merchants')
     count = cursor.fetchone()[0]
     if count == 0:
-        merchants_data = [
+        base_merchants = [
             # Electronics
             ("merchant_001_electronics", "Electro World", "electronics, laptops, smartphones", "http://localhost:8002/api/merchant/merchant_001_electronics/interact"),
             ("merchant_002_electronics", "Tech Haven", "electronics, gadgets, accessories", "http://localhost:8002/api/merchant/merchant_002_electronics/interact"),
@@ -36,15 +43,30 @@ def init_db():
             ("merchant_006_groceries", "Fresh Market", "groceries, fresh produce, meat", "http://localhost:8002/api/merchant/merchant_006_groceries/interact"),
             ("merchant_007_groceries", "Pantry Essentials", "groceries, dry goods, snacks", "http://localhost:8002/api/merchant/merchant_007_groceries/interact")
         ]
+        
+        merchants_data = []
+        os.makedirs("merchant_keys", exist_ok=True)
+        
+        for m in base_merchants:
+            merchant_id = m[0]
+            # Generate PKI key pair for the merchant
+            priv_pem, pub_pem = crypto_utils.generate_rsa_key_pair()
+            # Save private key securely
+            with open(f"merchant_keys/{merchant_id}_private.pem", "w") as f:
+                f.write(priv_pem)
+            
+            # Append public key to row
+            merchants_data.append((*m, pub_pem))
+            
         cursor.executemany('''
-            INSERT INTO merchants (merchant_id, name, category, endpoint_interact)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO merchants (merchant_id, name, category, endpoint_interact, public_key)
+            VALUES (?, ?, ?, ?, ?)
         ''', merchants_data)
         conn.commit()
         
         # Upsert into Pinecone Vector DB ONLY upon seeding the DB
         print("Seeding local database and upserting vectors to Pinecone...")
-        vector_store.upsert_merchants(merchants_data)
+        vector_store.upsert_merchants(base_merchants)
         
         products_data = [
             {
@@ -66,41 +88,6 @@ def init_db():
         vector_store.upsert_products(products_data)
     
     conn.close()
-
-def search_merchants_by_category(query: str):
-    # 1. Query Pinecone for the closest semantic matches
-    matched_merchant_ids = vector_store.semantic_search(query)
-    
-    if not matched_merchant_ids:
-        return []
-
-    # 2. Fetch those exact merchants from SQLite
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    # Securely format the IN clause for SQLite
-    placeholders = ','.join('?' * len(matched_merchant_ids))
-    sql = f'SELECT * FROM merchants WHERE merchant_id IN ({placeholders})'
-    
-    cursor.execute(sql, matched_merchant_ids)
-    all_merchants = cursor.fetchall()
-    
-    results = [dict(row) for row in all_merchants]
-    conn.close()
-    
-    return results
-
-def get_merchant_endpoint(merchant_id: str) -> str:
-    """Fetch the fully qualified endpoint URL for a given merchant"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('SELECT endpoint_interact FROM merchants WHERE merchant_id = ?', (merchant_id,))
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return row[0]
-    return ""
 
 if __name__ == "__main__":
     init_db()

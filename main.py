@@ -14,11 +14,11 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
 import os
 
-import database
-import mongo_db
-from mongo_db import MongoDB
-from models import X402Message, X402Metadata, RegistryResponsePayload, MerchantMatch, MerchantEndpoint
-from buyer_agent import process_user_intent
+from db import database
+from db import mongo_db
+from db.mongo_db import MongoDB
+from core.models import X402Message, X402Metadata, RegistryResponsePayload, MerchantMatch, MerchantEndpoint
+from agents.buyer_agent import process_user_intent
 from twilio.rest import Client
 
 app = FastAPI(title="Agentic Commerce Hub")
@@ -29,7 +29,7 @@ app.mount("/ui", StaticFiles(directory="static", html=True), name="static")
 @app.on_event("startup")
 async def startup_event():
     # Initialize SQLite (Registry) and Pinecone
-    database.init_db()
+    pass
     # Initialize MongoDB (Memory, Sessions, Transactions)
     MongoDB.connect()
 
@@ -39,7 +39,7 @@ async def shutdown_event():
 
 async def process_and_reply_twilio(customer_id: str, user_intent: str):
     print(f"[Background Task] Starting process_and_reply_twilio for {customer_id}")
-    from mcp_server import send_twilio_message
+    from mcp.mcp_server import send_twilio_message
     reply, session_id = await process_user_intent(customer_id, user_intent)
     if reply:
         print(f"[Background Task] Sending reply: {reply}")
@@ -65,8 +65,8 @@ async def twilio_whatsapp_webhook(
     print(f"Body: {user_intent}")
     
     # Check if the user is confirming a payment
-    from mongo_db import get_customer_transactions, update_transaction_status
-    from mcp_server import send_twilio_message
+    from db.mongo_db import get_customer_transactions, update_transaction_status
+    from mcp.mcp_server import send_twilio_message
     
     transactions = await get_customer_transactions(customer_id)
     if transactions:
@@ -92,7 +92,7 @@ async def chat_endpoint(req: ChatRequest):
     Endpoint for the web UI to interact with the agent.
     """
     # Check if the user is confirming a payment
-    from mongo_db import get_customer_transactions, update_transaction_status
+    from db.mongo_db import get_customer_transactions, update_transaction_status
     transactions = await get_customer_transactions(req.customer_id)
     if transactions:
         latest_tx = transactions[0]

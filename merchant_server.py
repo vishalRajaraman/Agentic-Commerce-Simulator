@@ -1,13 +1,13 @@
 from fastapi import FastAPI
 import uvicorn
 from pydantic import BaseModel
-from merchant_agent import get_merchant_agent
+from agents.merchant_agent import get_merchant_agent
 from typing import Dict, Any
 
 app = FastAPI(title="Merchant Network Server")
 
 class AP2Payload(BaseModel):
-    ap2_token: str
+    ap2_token: dict
 
 class LinkPayload(BaseModel):
     final_terms: str

@@ -10,7 +10,9 @@ from mcp import ClientSession
 from mcp.client.sse import sse_client
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_core.messages import AIMessage
-import mongo_db
+from db import mongo_db
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Ensure NIM_API_KEY is available in .env
 nim_api_key = os.getenv("NIM_API_KEY")

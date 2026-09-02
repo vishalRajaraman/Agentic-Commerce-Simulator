@@ -1,10 +1,8 @@
 from mcp.server.fastmcp import FastMCP
 from typing import List, Dict
-import database
-import mongo_db
-import vector_store
-from auth_layer import sign_payload
-from merchant_agent import get_merchant_agent
+from db import database
+from db import mongo_db
+from db import vector_store
 import asyncio
 import os
 import httpx
@@ -24,6 +22,19 @@ except Exception as e:
 
 # Initialize FastMCP Server on port 8001 to avoid conflicting with FastAPI on 8000
 mcp = FastMCP("AgenticCommerceTools", port=8001)
+
+from core import crypto_utils
+from core.auth_layer import create_ap2_handshake
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+if not os.path.exists("buyer_private.pem"):
+    buyer_priv, buyer_pub = crypto_utils.generate_rsa_key_pair()
+    with open("buyer_private.pem", "w") as f: f.write(buyer_priv)
+    with open("buyer_public.pem", "w") as f: f.write(buyer_pub)
+else:
+    with open("buyer_private.pem", "r") as f: buyer_priv = f.read()
+    with open("buyer_public.pem", "r") as f: buyer_pub = f.read()
 
 @mcp.tool()
 def query_registry(user_query: str) -> List[Dict]:
@@ -85,13 +96,19 @@ async def negotiate_with_merchant(customer_id: str, merchant_id: str, session_id
     
     # Construct the payload
     payload = {
+        "customer_id": customer_id,
         "session_id": session_id,
         "product": product_dict,
         "proposed_terms": proposed_terms
     }
     
-    # Sign payload for AP2 Handshake
-    ap2_token = sign_payload(agent_id=customer_id, payload=payload)
+    # Fetch merchant public key for encryption
+    merchant_pub = database.get_merchant_public_key(merchant_id)
+    if not merchant_pub:
+        return {"status": "error", "message": f"Merchant {merchant_id} public key not found in registry."}
+
+    # Create PKI AP2 Handshake token
+    ap2_token = create_ap2_handshake(buyer_priv, buyer_pub, merchant_pub, payload)
     
     # Send to merchant agent via network
     endpoint = database.get_merchant_endpoint(merchant_id)
