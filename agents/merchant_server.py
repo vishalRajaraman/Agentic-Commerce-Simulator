@@ -1,3 +1,6 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import FastAPI
 import uvicorn
 from pydantic import BaseModel
@@ -29,3 +32,4 @@ async def generate_payment_link(merchant_id: str, payload: LinkPayload):
 if __name__ == "__main__":
     # Run the distributed merchant servers on port 8002
     uvicorn.run(app, host="0.0.0.0", port=8002)
+
