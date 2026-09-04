@@ -3,9 +3,9 @@
 Agentic Commerce is an autonomous, multi-agent procurement and negotiation platform designed to revolutionize e-commerce interactions. By deploying LLM-powered buyer and merchant agents, the platform entirely automates the haggling and purchasing process.
 
 <div align="center">
-  <img src="docs/negotiation_ascii.svg" alt="Agentic Negotiation ASCII Agent Heads Animation" width="800"/>
+  <img src="docs/negotiation_v4.svg" alt="Agentic Commerce Minimal Agent Architecture Animation" width="800"/>
   <br/>
-  <em>Live Autonomous Negotiation: Monochrome ASCII Agent Heads communicating over AP2 / MCP data bridge.</em>
+  <em>Live Multi-Agent Communication: Buyer Agent and Merchant Agent negotiating over AP2 / MCP protocol.</em>
 </div>
 
 ## 🎯 What Does It Solve?
