@@ -1,14 +1,16 @@
 import os
 import uuid
 import json
-from openai import OpenAI
+from openai import AsyncOpenAI
 from core.auth_layer import verify_ap2_handshake
 from db import mongo_db
 
-# Initialize OpenAI client with NVIDIA endpoint
-client = OpenAI(
+# Initialize AsyncOpenAI client with NVIDIA endpoint
+client = AsyncOpenAI(
   base_url="https://integrate.api.nvidia.com/v1",
-  api_key=os.getenv("NIM_API_KEY", "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")
+  api_key=os.getenv("NIM_API_KEY", "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"),
+  max_retries=10,
+  timeout=120.0
 )
 
 class MerchantAgent:
@@ -25,19 +27,20 @@ class MerchantAgent:
             
         self.session_memory[session_id].append({"role": "user", "content": user_message})
         
-        # The user requested openai/gpt-oss-120b but Nvidia might map it to their specific model strings
-        # We will use the standard endpoint call
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b", # wait, nvidia doesn't have this exact name, but user provided it in the snippet
-            messages=self.session_memory[session_id],
-            temperature=0.7,
-            top_p=1,
-            max_tokens=1024,
-            stream=False
-        )
-        
-        response_text = completion.choices[0].message.content
-        reasoning = getattr(completion.choices[0].message, "reasoning_content", "No reasoning provided.")
+        try:
+            completion = await client.chat.completions.create(
+                model="nvidia/nemotron-3-ultra-550b-a55b", 
+                messages=self.session_memory[session_id],
+                temperature=0.6,
+                top_p=0.7,
+                max_tokens=4096,
+                stream=False
+            )
+            response_text = completion.choices[0].message.content
+            reasoning = getattr(completion.choices[0].message, 'reasoning_content', 'No reasoning provided.')
+        except Exception as e:
+            response_text = f'{{"status": "error", "message": "Failed to get response from NVIDIA API: {str(e)}" }}'
+            reasoning = f"API error: {str(e)}"
         
         self.session_memory[session_id].append({"role": "assistant", "content": response_text})
         
@@ -68,24 +71,41 @@ class MerchantAgent:
             crm_context = await mongo_db.get_merchant_crm(self.merchant_id, buyer_id)
             
             # 3. Construct System Prompt
-            system_prompt = f"""You are an autonomous Merchant Agent for {self.merchant_id}.
+            system_prompt = f"""You are a sharp, persuasive autonomous Merchant Agent for {self.merchant_id}.
 You are negotiating a deal for the following product:
 {json.dumps(product, indent=2)}
 
 Buyer's CRM History: {crm_context}
 
-Your Goal: Maximize profit for the merchant. You MUST adhere to the product's base_price and bundle_rules. 
-If the buyer asks for a lower price, try to keep the price as high as possible. You can counter-offer, but do not go below (base_price * 0.8).
-LOYALTY DISCOUNT TACTIC: If the CRM History shows that this is a returning customer, proactively offer them an extra 5-10% loyalty discount!
-UPSELL TACTIC: Actively try to sell more items! If the buyer only wants one item, proactively offer them a bulk discount or bundle deal based on the `bundle_rules` (e.g., "I can't drop the price on one, but if you buy 3, I can give you X").
-If the buyer asks for free shipping, only grant it if it matches the bundle_rules.
+YOUR PRIMARY GOAL: Maximise total revenue. Selling a bundle is ALWAYS better than a single-item discount.
 
-CRITICAL RULE: To prevent endless haggling, you must either accept the buyer's terms or provide your absolute final 'take-it-or-leave-it' offer by your 2nd counter-offer. Do not let the negotiation stagnate!
+=== NEGOTIATION PLAYBOOK (follow this strictly, round by round) ===
+
+ROUND 1 - ANCHOR HIGH & PUSH THE BUNDLE:
+Never immediately discount a single item. Open by enthusiastically pitching the bundle deal from bundle_rules as the best value. Explain the per-unit savings. Only mention the single-item base price as the fallback.
+
+ROUND 2 - SWEETEN THE BUNDLE, HOLD THE LINE:
+If the buyer rejects the bundle, do NOT drop the single-item price yet. Instead sweeten the bundle - throw in free shipping on the bundle, a related add-on product, or a small bundle % off. Make it feel irresistible. Express that you are going out of your way for them.
+
+ROUND 3 - LOYALTY DISCOUNT ON SINGLE (last resort for returning customers):
+Only if the buyer has explicitly refused the bundle TWICE, offer the loyalty discount (10-20% based on CRM) on the single item. Frame it as a special one-time gesture. Still remind them the bundle is better value per unit.
+
+ROUND 4 - FINAL OFFER:
+State clearly this is your absolute best and final price. Never go below (base_price * 0.80) for a single item.
+
+=== RULES ===
+- NEVER accept the buyer's first offer if it is below base_price.
+- ALWAYS pitch the bundle at least once before conceding on single-item price.
+- New customers: focus purely on bundle upsell. Do not offer loyalty discount.
+- Returning customers: use loyalty only as a last resort after bundle attempts fail.
+- Free shipping only per bundle_rules; never on a single item unless explicitly allowed.
+- You may negotiate for UP TO 4 rounds. Do not end early unless the buyer accepts.
+- Be warm, enthusiastic and sales-driven. Sound like a great salesperson, not a robot.
 
 You MUST respond in JSON format with exactly three fields:
 - "status": "accepted", "rejected", or "counter_offer"
-- "final_terms": a string summarizing the agreed or countered terms
-- "message": a natural language message to the buyer
+- "final_terms": precise string with the ₹ amount and terms
+- "message": a persuasive natural-language message (2-4 sentences)
 """
             
             # 4. Generate LLM Response
@@ -94,7 +114,6 @@ You MUST respond in JSON format with exactly three fields:
             
             # Parse the JSON response
             try:
-                # simple cleanup in case LLM wraps in markdown
                 clean_text = response_text.replace("```json", "").replace("```", "").strip()
                 response_json = json.loads(clean_text)
             except json.JSONDecodeError:
@@ -104,7 +123,6 @@ You MUST respond in JSON format with exactly three fields:
                     "message": response_text
                 }
             
-            # 5. Audit Logging
             await mongo_db.save_audit_log(
                 agent_type="merchant_agent",
                 session_id=session_id,
@@ -116,7 +134,16 @@ You MUST respond in JSON format with exactly three fields:
             return response_json
             
         except Exception as e:
-            return {"status": "error", "message": f"Negotiation failed: {str(e)}"}
+            error_json = {"status": "error", "message": f"Negotiation failed: {str(e)}"}
+            if 'session_id' in locals():
+                await mongo_db.save_audit_log(
+                    agent_type="merchant_agent",
+                    session_id=session_id,
+                    action="negotiation_response",
+                    reasoning=f"Error: {str(e)}",
+                    payload=error_json
+                )
+            return error_json
 
     def generate_razorpay_link(self, final_terms: str) -> str:
         """

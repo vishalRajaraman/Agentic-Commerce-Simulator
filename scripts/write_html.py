@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+html = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7,14 +7,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            /* Sidebar: clean light */
-            --sidebar-bg:          #ffffff;
-            --sidebar-hover:       #f0f3fa;
-            --sidebar-active:      #eef1fd;
-            --sidebar-text:        #5a6e87;
-            --sidebar-text-active: #3451d1;
-            --sidebar-border:      #e4e9f2;
-            --sidebar-label:       #94a3b8;
+            /* Sidebar: deep navy */
+            --sidebar-bg:     #1b2332;
+            --sidebar-hover:  #263145;
+            --sidebar-active: #2e3f5c;
+            --sidebar-text:   #8fa5c4;
+            --sidebar-text-active: #e2ecff;
+            --sidebar-border: #253044;
+            --sidebar-label:  #4d6284;
 
             /* Header */
             --header-bg:     #ffffff;
@@ -65,7 +65,6 @@
         *{box-sizing:border-box;margin:0;padding:0;}
         html,body{height:100%;font-family:'Inter',sans-serif;}
         body{background:var(--bg);color:var(--text-primary);display:flex;flex-direction:column;overflow:hidden;}
-        .app-body{display:flex;flex:1;overflow:hidden;min-height:0;}
 
         /* ── HEADER ── */
         header{
@@ -115,7 +114,6 @@
             display:flex;flex-direction:column;
             transition:width .25s cubic-bezier(.4,0,.2,1);
             overflow:hidden;flex-shrink:0;
-            box-shadow:1px 0 0 var(--sidebar-border);
         }
         aside#sidebar.collapsed{width:var(--sidebar-collapsed);}
 
@@ -137,41 +135,40 @@
         .nav-section-label{
             font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;
             color:var(--sidebar-label);
-            padding:.9rem 1rem .35rem;white-space:nowrap;transition:opacity .2s;
+            padding:.8rem 1rem .35rem;white-space:nowrap;transition:opacity .2s;
         }
         aside#sidebar.collapsed .nav-section-label{opacity:0;}
 
         .nav-item{
             display:flex;align-items:center;gap:.7rem;
-            padding:.6rem .9rem;
+            padding:.58rem .875rem;
             cursor:pointer;border-radius:7px;
-            margin:2px 8px;
+            margin:1px 8px;
             color:var(--sidebar-text);
-            font-size:.84rem;font-weight:500;
+            font-size:.825rem;font-weight:500;
             white-space:nowrap;overflow:hidden;
             transition:background .15s,color .15s;
             border:none;background:none;
             width:calc(100% - 16px);text-align:left;
         }
-        .nav-item:hover{background:var(--sidebar-hover);color:var(--text-primary);}
-        .nav-item.active{background:var(--sidebar-active);color:var(--sidebar-text-active);font-weight:600;}
-        .nav-item svg{flex-shrink:0;}
+        .nav-item:hover{background:var(--sidebar-hover);color:var(--sidebar-text-active);}
+        .nav-item.active{background:var(--sidebar-active);color:var(--sidebar-text-active);}
+        .nav-item svg{flex-shrink:0;opacity:.8;}
         .nav-label{overflow:hidden;transition:opacity .15s;white-space:nowrap;}
         aside#sidebar.collapsed .nav-label{opacity:0;width:0;}
 
         /* ── MAIN ── */
-        main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
-        .page{display:none;flex:1;overflow:hidden;flex-direction:column;min-height:0;}
+        main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+        .page{display:none;flex:1;overflow:hidden;flex-direction:column;}
         .page.active{display:flex;}
 
         /* ── AGENT PAGE ── */
-        #page-agent{flex-direction:row;min-height:0;height:100%;}
+        #page-agent{flex-direction:row;}
 
         #chat-pane{
             display:flex;flex-direction:column;
             width:62%;min-width:320px;max-width:calc(100% - 200px);
             flex-shrink:0;background:var(--surface);
-            height:100%;
         }
         #chat-pane.full{width:100%;max-width:100%;}
 
@@ -185,7 +182,7 @@
 
         #negotiation-pane{
             flex:1;min-width:200px;display:flex;flex-direction:column;
-            background:var(--surface-2);overflow:hidden;height:100%;
+            background:var(--surface-2);overflow:hidden;
         }
         #negotiation-pane.hidden{display:none;}
 
@@ -566,4 +563,8 @@
     document.addEventListener('DOMContentLoaded',()=>{fetchOrders();});
 </script>
 </body>
-</html>
+</html>"""
+
+with open('static/index.html', 'w', encoding='utf-8') as f:
+    f.write(html)
+print("Done")

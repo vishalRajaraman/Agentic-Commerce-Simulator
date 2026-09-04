@@ -25,3 +25,6 @@ Thumbs.db
 # PKI Keys
 *.pem
 merchant_keys
+
+# Logs
+*.log

@@ -24,6 +24,8 @@ llm = ChatOpenAI(
     model="nvidia/nemotron-3-ultra-550b-a55b",
     temperature=0.7,
     max_tokens=1024,
+    max_retries=10,
+    request_timeout=120,
     model_kwargs={"extra_body": {"chat_template_kwargs": {"enable_thinking": True}}}
 )
 
@@ -38,6 +40,18 @@ You have access to several MCP tools. Follow these steps strictly:
 6. Summarize the transaction and update the user's preferences for that specific merchant using `update_customer_profile` (you MUST provide the merchant_id) before finishing.
 
 Always fight for the lowest possible price! However, to avoid endless haggling, if a merchant provides a final 'take-it-or-leave-it' counter-offer, you MUST accept it (if reasonable) or move on to another merchant immediately. Do not get stuck in a loop.
+
+CRITICAL: Your final deal confirmation message to the user MUST STRICTLY follow this exact plain-text structure. Do NOT include any emojis, do NOT use markdown formatting like asterisks (**), and do NOT show internal IDs (like merchant_007 or prod_404).
+
+Perfect! I found [Product Name] at [Store Name] and negotiated using your loyalty history.
+
+Deal Summary:
+- Product: [Product Name]
+- Base Price: $[Base Price]
+- Negotiated Price: $[Negotiated Price] ([Discount details])
+- Shipping: [Shipping details]
+
+[Request user approval, e.g., Do you approve this transaction?]
 """
 
 async def process_user_intent(customer_id: str, intent: str, session_id: str = None):
@@ -68,42 +82,66 @@ async def process_user_intent(customer_id: str, intent: str, session_id: str = N
                 session_id = session_id or os.urandom(8).hex()
                 final_response = ""
                 
-                async for chunk in agent_executor.astream(
-                    {"messages": [("user", f"User ID: {customer_id}. User wants: {intent}. Negotiation Session ID: {session_id}")]},
-                    stream_mode="updates"
-                ):
-                    for node_name, state_update in chunk.items():
-                        if "messages" in state_update:
-                            messages = state_update["messages"]
-                            if not isinstance(messages, list):
-                                messages = [messages]
+                try:
+                    async for chunk in agent_executor.astream(
+                        {"messages": [("user", f"User ID: {customer_id}. User wants: {intent}. Negotiation Session ID: {session_id}")]},
+                        stream_mode="updates"
+                    ):
+                        try:
+                            for node_name, state_update in chunk.items():
+                                if "messages" in state_update:
+                                    messages = state_update["messages"]
+                                    if not isinstance(messages, list):
+                                        messages = [messages]
+                                    
+                                    for msg in messages:
+                                        if isinstance(msg, AIMessage):
+                                            reasoning_text = ""
+                                            if msg.content:
+                                                reasoning_text += str(msg.content)
+                                                final_response = str(msg.content)
+                                            if hasattr(msg, "additional_kwargs") and "reasoning_content" in msg.additional_kwargs:
+                                                reasoning_text += f"\n[Internal Reasoning]: {msg.additional_kwargs['reasoning_content']}"
+                                            
+                                            tool_calls = msg.tool_calls if hasattr(msg, "tool_calls") else []
+                                            
+                                            if reasoning_text or tool_calls:
+                                                await mongo_db.save_audit_log(
+                                                    agent_type="buyer_agent",
+                                                    session_id=session_id,
+                                                    action="decision_step",
+                                                    reasoning=reasoning_text.strip(),
+                                                    payload={"tool_calls": tool_calls}
+                                                )
+                        except Exception as chunk_err:
+                            print(f"[Warning] Error processing chunk: {chunk_err}")
+                            continue
                             
-                            for msg in messages:
-                                if isinstance(msg, AIMessage):
-                                    reasoning_text = ""
-                                    if msg.content:
-                                        reasoning_text += str(msg.content)
-                                        final_response = str(msg.content)
-                                    if hasattr(msg, "additional_kwargs") and "reasoning_content" in msg.additional_kwargs:
-                                        reasoning_text += f"\n[Internal Reasoning]: {msg.additional_kwargs['reasoning_content']}"
-                                    
-                                    tool_calls = msg.tool_calls if hasattr(msg, "tool_calls") else []
-                                    
-                                    if reasoning_text or tool_calls:
-                                        await mongo_db.save_audit_log(
-                                            agent_type="buyer_agent",
-                                            session_id=session_id,
-                                            action="decision_step",
-                                            reasoning=reasoning_text.strip(),
-                                            payload={"tool_calls": tool_calls}
-                                        )
+                except Exception as e:
+                    # Python 3.11 ExceptionGroup from TaskGroup - unwrap the real error
+                    if isinstance(e, BaseExceptionGroup):
+                        real_errors = list(e.exceptions)
+                        real_msg = "; ".join(str(err) for err in real_errors)
+                        print(f"[TaskGroup Error] {real_msg}")
+                        if not final_response:
+                            final_response = f"The agent encountered an error during negotiation: {real_msg}"
+                    else:
+                        print(f"[Chunk Error] {str(e)}")
+                        if not final_response:
+                            final_response = f"Error during negotiation: {str(e)}"
                 
-                return final_response, session_id
+                return final_response or "I was unable to complete the negotiation. Please try again.", session_id
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"Failed to process user intent via MCP HTTP Server: {e}")
-        return f"System error occurred: {str(e)}", None
+        if isinstance(e, BaseExceptionGroup):
+            real_errors = list(e.exceptions)
+            real_msg = "; ".join(str(err) for err in real_errors)
+            print(f"[TaskGroup Top-Level Error] {real_msg}")
+            return f"System error occurred: {real_msg}", None
+        else:
+            print(f"Failed to process user intent via MCP HTTP Server: {e}")
+            return f"System error occurred: {str(e)}", None
 
 if __name__ == "__main__":
     asyncio.run(process_user_intent("user_123", "Buy me 2 pairs of black socks"))

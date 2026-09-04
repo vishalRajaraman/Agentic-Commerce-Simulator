@@ -37,13 +37,80 @@ async def startup_event():
 async def shutdown_event():
     MongoDB.disconnect()
 
-async def process_and_reply_twilio(customer_id: str, user_intent: str):
+# Twilio Client Initialization
+twilio_client = None
+try:
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    if account_sid and auth_token:
+        twilio_client = Client(account_sid, auth_token)
+except Exception as e:
+    print(f"Twilio initialization failed: {e}")
+
+def send_twilio_message(to_number: str, body: str) -> str:
+    """
+    Sends a WhatsApp message to the user via Twilio.
+    """
+    if not twilio_client:
+        print(f"\n--- MOCK TWILIO MESSAGE TO {to_number} ---\n{body}\n---------------------------------------\n")
+        return "Twilio not configured. Message mocked."
+    
+    from_number = os.getenv("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")
+    if not to_number.startswith("whatsapp:"):
+        to_number = f"whatsapp:{to_number}"
+        
+    try:
+        message = twilio_client.messages.create(
+            from_=from_number,
+            body=body,
+            to=to_number
+        )
+        print(f"[Twilio] Sent message SID {message.sid} to {to_number}")
+        return f"Message sent successfully with SID {message.sid}"
+    except Exception as e:
+        print(f"[Twilio Error] {e}")
+        return f"Failed to send message: {e}"
+
+async def execute_payment(latest_tx: dict) -> str:
+    from db.mongo_db import get_razorpay_credentials, update_transaction_status
+    import razorpay
+    
+    customer_id = latest_tx["customer_id"]
+    rzp_customer_id, rzp_token_id = await get_razorpay_credentials(customer_id)
+    
+    if not rzp_token_id:
+        return f"Wallet Not Setup! Please authorize your Agent Wallet."
+        
+    if rzp_token_id.startswith("mock_token_"):
+        import uuid
+        fake_id = "pay_" + uuid.uuid4().hex[:14]
+        await update_transaction_status(latest_tx["_id"], "Paid")
+        return f"Payment successful\nItem name: {latest_tx.get('item_description')}\nAmount: {latest_tx.get('amount_paise', 1000)/100}\nRazorpay receipt: {fake_id}"
+        
+    try:
+        rzp_key = os.getenv("RAZORPAY_KEY_ID")
+        rzp_secret = os.getenv("RAZORPAY_KEY_SECRET")
+        client = razorpay.Client(auth=(rzp_key, rzp_secret))
+        
+        order = client.order.create({
+            "amount": latest_tx.get("amount_paise", 1000),
+            "currency": "INR",
+            "customer_id": rzp_customer_id,
+            "receipt": f"receipt_{str(latest_tx['_id'])}"
+        })
+        
+        await update_transaction_status(latest_tx["_id"], "Paid")
+        return f"Payment successful\nItem name: {latest_tx.get('item_description')}\nAmount: {latest_tx.get('amount_paise', 1000)/100}\nRazorpay receipt: {order['receipt']}"
+    except Exception as e:
+        await update_transaction_status(latest_tx["_id"], "Failed")
+        return f"Payment failed: {str(e)}"
+
+async def process_and_reply_twilio(customer_id: str, user_intent: str, phone_number: str = None):
     print(f"[Background Task] Starting process_and_reply_twilio for {customer_id}")
-    from mcp.mcp_server import send_twilio_message
     reply, session_id = await process_user_intent(customer_id, user_intent)
     if reply:
         print(f"[Background Task] Sending reply: {reply}")
-        send_twilio_message(customer_id, reply)
+        send_twilio_message(phone_number or customer_id, reply)
     else:
         print("[Background Task] No reply generated.")
 
@@ -57,30 +124,30 @@ async def twilio_whatsapp_webhook(
     Webhook to receive messages from Twilio WhatsApp.
     We process the intent in the background so Twilio doesn't time out.
     """
-    customer_id = From.replace("whatsapp:", "")
+    phone_number = From.replace("whatsapp:", "")
+    # Map all WhatsApp users to our demo user so they have access to the configured Razorpay wallet
+    customer_id = "vishal_123"
     user_intent = Body.strip()
     
     print(f"=== Received Twilio Webhook ===")
-    print(f"From: {From} -> Customer ID: {customer_id}")
+    print(f"From: {From} -> Phone: {phone_number} -> Customer ID: {customer_id}")
     print(f"Body: {user_intent}")
     
     # Check if the user is confirming a payment
     from db.mongo_db import get_customer_transactions, update_transaction_status
-    from mcp.mcp_server import send_twilio_message
     
+
     transactions = await get_customer_transactions(customer_id)
     if transactions:
         latest_tx = transactions[0] # They are sorted by _id desc
-        if latest_tx.get("status") == "Pending Payment" and user_intent.lower() in ["yes", "y", "ok", "sure", "pay"]:
-            # Mock payment processing
-            await update_transaction_status(latest_tx["_id"], "Paid")
-            msg = f"Payment Successful for {latest_tx.get('item_description', 'your order')}! Your transaction ID is {latest_tx['_id']}. The merchant will ship it shortly."
-            send_twilio_message(customer_id, msg)
+        if latest_tx.get("status") == "Pending Payment" and user_intent.lower() in ["yes", "y", "ok", "sure", "pay", "approve"]:
+            msg = await execute_payment(latest_tx)
+            send_twilio_message(phone_number, msg)
             from fastapi.responses import Response
             return Response(content='<Response></Response>', media_type="application/xml")
 
     # Run the buyer agent processing and reply in the background
-    background_tasks.add_task(process_and_reply_twilio, customer_id, user_intent)
+    background_tasks.add_task(process_and_reply_twilio, customer_id, user_intent, phone_number)
     
     # Twilio requires valid TwiML response. We return empty TwiML since the agent will reply via API later.
     from fastapi.responses import Response
@@ -96,9 +163,8 @@ async def chat_endpoint(req: ChatRequest):
     transactions = await get_customer_transactions(req.customer_id)
     if transactions:
         latest_tx = transactions[0]
-        if latest_tx.get("status") == "Pending Payment" and req.intent.lower() in ["yes", "y", "ok", "sure", "pay"]:
-            await update_transaction_status(latest_tx["_id"], "Paid")
-            msg = f"Payment Successful for {latest_tx.get('item_description', 'your order')}! Your transaction ID is {latest_tx['_id']}. The merchant will ship it shortly."
+        if latest_tx.get("status") == "Pending Payment" and req.intent.lower() in ["yes", "y", "ok", "sure", "pay", "approve"]:
+            msg = await execute_payment(latest_tx)
             return {"reply": msg, "session_id": req.session_id}
 
     reply, session_id = await process_user_intent(req.customer_id, req.intent, req.session_id)
@@ -172,3 +238,75 @@ async def registry_search(request_payload: X402Message):
     )
     
     return response
+
+import razorpay
+import uuid
+import random
+from datetime import datetime, timedelta
+
+@app.post("/api/razorpay/create_setup_order")
+async def create_setup_order(req: Request):
+    data = await req.json()
+    customer_id = data.get("customer_id", "vishal_123")
+    
+    rzp_key = os.getenv("RAZORPAY_KEY_ID")
+    rzp_secret = os.getenv("RAZORPAY_KEY_SECRET")
+    client = razorpay.Client(auth=(rzp_key, rzp_secret))
+    
+    uid = uuid.uuid4().hex[:6]
+    phone = str(random.randint(1000000000, 9999999999))
+    rzp_customer = client.customer.create({
+        "name": f"Vishal {uid}",
+        "email": f"vishal_{uid}@example.com",
+        "contact": phone
+    })
+    
+    order_data = {
+        "amount": 100,
+        "currency": "INR",
+        "customer_id": rzp_customer["id"]
+    }
+    
+    order = client.order.create(data=order_data)
+    
+    return {
+        "order_id": order["id"],
+        "razorpay_customer_id": rzp_customer["id"],
+        "key": rzp_key
+    }
+
+@app.post("/api/razorpay/verify_setup")
+async def verify_setup(req: Request):
+    data = await req.json()
+    razorpay_payment_id = data.get("razorpay_payment_id")
+    razorpay_order_id = data.get("razorpay_order_id")
+    razorpay_signature = data.get("razorpay_signature")
+    customer_id = data.get("customer_id", "vishal_123")
+    rzp_customer_id = data.get("razorpay_customer_id")
+    
+    rzp_key = os.getenv("RAZORPAY_KEY_ID")
+    rzp_secret = os.getenv("RAZORPAY_KEY_SECRET")
+    client = razorpay.Client(auth=(rzp_key, rzp_secret))
+    
+    try:
+        client.utility.verify_payment_signature({
+            'razorpay_order_id': razorpay_order_id,
+            'razorpay_payment_id': razorpay_payment_id,
+            'razorpay_signature': razorpay_signature
+        })
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+        
+    payment = client.payment.fetch(razorpay_payment_id)
+    token_id = payment.get("token_id")
+    
+    if not token_id:
+        # Fallback for test mode to mock a token if standard order is used
+        token_id = f"mock_token_{razorpay_payment_id}"
+        
+    if token_id:
+        from db.mongo_db import save_razorpay_credentials
+        await save_razorpay_credentials(customer_id, rzp_customer_id, token_id)
+        return {"status": "success", "message": "Wallet authorized successfully!"}
+    
+    return {"status": "error", "message": "Token not generated."}

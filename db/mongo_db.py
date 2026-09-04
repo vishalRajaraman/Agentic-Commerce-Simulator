@@ -70,6 +70,24 @@ async def get_customer_profile(customer_id: str):
         return json.dumps(summary_dict, indent=2) if summary_dict else "No existing profile for this customer."
     return "No existing profile for this customer."
 
+async def save_razorpay_credentials(customer_id: str, razorpay_customer_id: str, razorpay_token_id: str):
+    collection = MongoDB.get_collection("profiles")
+    await collection.update_one(
+        {"customer_id": customer_id},
+        {"$set": {
+            "razorpay_customer_id": razorpay_customer_id,
+            "razorpay_token_id": razorpay_token_id
+        }},
+        upsert=True
+    )
+
+async def get_razorpay_credentials(customer_id: str):
+    collection = MongoDB.get_collection("profiles")
+    doc = await collection.find_one({"customer_id": customer_id})
+    if doc:
+        return doc.get("razorpay_customer_id"), doc.get("razorpay_token_id")
+    return None, None
+
 async def create_transaction(transaction_data: dict):
     collection = MongoDB.get_collection("transactions")
     result = await collection.insert_one(transaction_data)

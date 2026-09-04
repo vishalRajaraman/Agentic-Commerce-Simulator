@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Wallet Setup</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+        .btn {
+            background-color: #2b52ff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: #1a3ecc;
+        }
+        #status {
+            margin-top: 20px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545 !important;
+        }
+    </style>
+    <!-- Include Razorpay Checkout JS -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Authorize Agent Wallet</h2>
+        <p>Link your bank account via UPI AutoPay, Cards, or e-Mandate to allow your Buyer Agent to pay for negotiated deals autonomously.</p>
+        
+
+        <button id="setup-btn" class="btn">Link Bank Account</button>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        document.getElementById('setup-btn').onclick = async function(e) {
+            e.preventDefault();
+            const statusDiv = document.getElementById('status');
+            const btn = document.getElementById('setup-btn');
+            
+            btn.disabled = true;
+            btn.innerText = "Processing...";
+            statusDiv.innerText = "";
+            statusDiv.className = "";
+
+            try {
+                // 1. Create Setup Order on our Backend
+                const response = await fetch('/api/razorpay/create_setup_order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        customer_id: "vishal_123"
+                    }) // Hardcoded customer_id for testing
+                });
+                
+                const data = await response.json();
+                
+                if (!data.order_id) {
+                    throw new Error("Failed to create order");
+                }
+
+                // 2. Configure Razorpay Checkout Options
+                const options = {
+                    "key": data.key,
+                    "order_id": data.order_id,
+                    "customer_id": data.razorpay_customer_id,
+                    "name": "Agentic Commerce",
+                    "description": "Authorize Agent Wallet",
+                    "handler": async function (response) {
+                        // 3. Verify Signature and Save Token on Backend
+                        statusDiv.innerText = "Verifying authorization...";
+                        
+                        const verifyRes = await fetch('/api/razorpay/verify_setup', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_signature: response.razorpay_signature,
+                                customer_id: "vishal_123",
+                                razorpay_customer_id: data.razorpay_customer_id
+                            })
+                        });
+                        
+                        const verifyData = await verifyRes.json();
+                        if (verifyData.status === "success") {
+                            statusDiv.innerText = "✅ Wallet authorized successfully! Your Agent can now pay autonomously.";
+                            btn.style.display = 'none';
+                        } else {
+                            statusDiv.innerText = "❌ Verification failed: " + verifyData.message;
+                            statusDiv.className = "error";
+                            btn.disabled = false;
+                            btn.innerText = "Try Again";
+                        }
+                    },
+                    "theme": {
+                        "color": "#2b52ff"
+                    }
+                };
+
+                // Open Razorpay Checkout
+                const rzp = new Razorpay(options);
+                rzp.on('payment.failed', function (response){
+                    statusDiv.innerText = "❌ Payment failed: " + response.error.description;
+                    statusDiv.className = "error";
+                    btn.disabled = false;
+                    btn.innerText = "Try Again";
+                });
+                rzp.open();
+                
+            } catch (err) {
+                statusDiv.innerText = "❌ Error: " + err.message;
+                statusDiv.className = "error";
+                btn.disabled = false;
+                btn.innerText = "Link Bank Account";
+            }
+        }
+    </script>
+</body>
+</html>
