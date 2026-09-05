@@ -3,7 +3,134 @@
 Agentic Commerce is an autonomous, multi-agent procurement and negotiation platform designed to revolutionize e-commerce interactions. By deploying LLM-powered buyer and merchant agents, the platform entirely automates the haggling and purchasing process.
 
 <div align="center">
-  <img src="docs/negotiation_v4.svg" alt="Agentic Commerce Minimal Agent Architecture Animation" width="800"/>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 380" width="800" height="380">
+    <defs>
+      <!-- Subtle Transparent Grid for GitHub Background -->
+      <pattern id="ascii-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+        <circle cx="2" cy="2" r="1" fill="currentColor" opacity="0.12"/>
+      </pattern>
+
+      <!-- Drop Shadow Filters -->
+      <filter id="card-shadow" x="-10%" y="-10%" width="120%" height="120%">
+        <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.25"/>
+      </filter>
+      
+      <filter id="glow-blue" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="5" result="blur" />
+        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+      </filter>
+    </defs>
+
+    <!-- Transparent Container Background (Blends natively with GitHub Dark/Light mode) -->
+    <rect width="800" height="380" rx="16" fill="none"/>
+    
+    <!-- Subtle ASCII Matrix Backdrop Grid -->
+    <rect width="800" height="380" rx="16" fill="url(#ascii-grid)" class="grid-layer"/>
+
+    <!-- Top ASCII Terminal Header -->
+    <g font-family="monospace" font-size="11" opacity="0.5" fill="currentColor">
+      <text x="25" y="32">01000001 01000111 01000101 01001110 01000100</text>
+      <text x="540" y="32">:: AP2_AGENT_PROTOCOL_V2 ::</text>
+    </g>
+
+    <!-- Central Animated Data Bridge -->
+    <g>
+      <!-- Dotted Bridge Line -->
+      <line x1="220" y1="180" x2="580" y2="180" stroke="currentColor" stroke-width="2" stroke-dasharray="4 6" opacity="0.3"/>
+
+      <!-- Animated Flow Line -->
+      <line x1="220" y1="180" x2="580" y2="180" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="10 20" opacity="0.8">
+        <animate attributeName="stroke-dashoffset" from="60" to="0" dur="2s" repeatCount="indefinite"/>
+      </line>
+
+      <!-- Floating Data Packets -->
+      <circle cx="300" cy="180" r="4" fill="#3b82f6" filter="url(#glow-blue)">
+        <animate attributeName="cx" values="220;580;220" dur="3.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- ================= LEFT AGENT: CLIENT / BUYER AGENT ================= -->
+    <g transform="translate(100, 100)" filter="url(#card-shadow)">
+      <!-- Natural Idle Floating Animation -->
+      <animateTransform attributeName="transform" type="translate" values="100,100; 100,94; 100,100" dur="3.5s" repeatCount="indefinite"/>
+
+      <!-- Antenna (Stem + Circle Top Node) -->
+      <line x1="50" y1="40" x2="50" y2="15" stroke="#64748b" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="50" cy="10" r="11" fill="#64748b"/>
+      <circle cx="50" cy="10" r="4" fill="#ffffff"/>
+
+      <!-- Main Agent Head (Rounded Rectangle) -->
+      <rect x="0" y="38" width="100" height="60" rx="16" fill="#475569"/>
+
+      <!-- Circular Eyes (Two Dots) -->
+      <circle cx="30" cy="68" r="7" fill="#ffffff"/>
+      <circle cx="70" cy="68" r="7" fill="#ffffff"/>
+
+      <!-- Agent Title & Role -->
+      <text x="50" y="125" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="currentColor">Buyer Agent</text>
+      <text x="50" y="145" text-anchor="middle" font-family="monospace" font-size="10" opacity="0.65" fill="currentColor">Formulates intent &amp; negotiates</text>
+    </g>
+
+    <!-- ================= RIGHT AGENT: REMOTE / MERCHANT AGENT ================= -->
+    <g transform="translate(600, 100)" filter="url(#card-shadow)">
+      <!-- Natural Idle Floating Animation -->
+      <animateTransform attributeName="transform" type="translate" values="600,100; 600,106; 600,100" dur="3.8s" repeatCount="indefinite"/>
+
+      <!-- Antenna (Stem + Circle Top Node) -->
+      <line x1="50" y1="40" x2="50" y2="15" stroke="#2563eb" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="50" cy="10" r="11" fill="#2563eb"/>
+      <circle cx="50" cy="10" r="4" fill="#ffffff"/>
+
+      <!-- Main Agent Head (Rounded Rectangle) -->
+      <rect x="0" y="38" width="100" height="60" rx="16" fill="#2563eb"/>
+
+      <!-- Circular Eyes (Two Dots) -->
+      <circle cx="30" cy="68" r="7" fill="#ffffff"/>
+      <circle cx="70" cy="68" r="7" fill="#ffffff"/>
+
+      <!-- Agent Title & Role -->
+      <text x="50" y="125" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="currentColor">Merchant Agent</text>
+      <text x="50" y="145" text-anchor="middle" font-family="monospace" font-size="10" opacity="0.65" fill="currentColor">Evaluates catalog &amp; pricing</text>
+    </g>
+
+    <!-- ================= ANIMATED SPEECH & DATA BUBBLES ================= -->
+
+    <!-- PHASE 1: BUYER OFFERS -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;1;1;1;0;0;0;0;0" dur="9s" repeatCount="indefinite"/>
+      <rect x="230" y="75" width="170" height="50" rx="8" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+      <polygon points="250,125 240,140 262,125" fill="#1e293b" stroke="#64748b" stroke-width="1.5"/>
+      <line x1="251" y1="124" x2="261" y2="124" stroke="#1e293b" stroke-width="2.5"/>
+
+      <text x="315" y="98" text-anchor="middle" fill="#f8fafc" font-family="monospace" font-size="11" font-weight="bold">PROPOSE: ₹7,000</text>
+      <text x="315" y="114" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="9">Target: Base Item</text>
+    </g>
+
+    <!-- PHASE 2: MERCHANT COUNTERS -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;0;1;1;1;0;0;0" dur="9s" repeatCount="indefinite"/>
+      <rect x="400" y="75" width="170" height="50" rx="8" fill="#1e3a8a" stroke="#3b82f6" stroke-width="1.5"/>
+      <polygon points="545,125 555,140 535,125" fill="#1e3a8a" stroke="#3b82f6" stroke-width="1.5"/>
+      <line x1="536" y1="124" x2="544" y2="124" stroke="#1e3a8a" stroke-width="2.5"/>
+
+      <text x="485" y="98" text-anchor="middle" fill="#ffffff" font-family="monospace" font-size="11" font-weight="bold">COUNTER: ₹7,500</text>
+      <text x="485" y="114" text-anchor="middle" fill="#93c5fd" font-family="monospace" font-size="9">+ Free Leather Case 🎒</text>
+    </g>
+
+    <!-- PHASE 3: DEAL SIGNED -->
+    <g opacity="0">
+      <animate attributeName="opacity" values="0;0;0;0;0;0;1;1;0" dur="9s" repeatCount="indefinite"/>
+      <rect x="290" y="65" width="220" height="60" rx="8" fill="#064e3b" stroke="#10b981" stroke-width="1.5"/>
+      <text x="400" y="92" text-anchor="middle" fill="#a7f3d0" font-family="monospace" font-size="12" font-weight="bold">⚡ DEAL CONFIRMED 🤝</text>
+      <text x="400" y="110" text-anchor="middle" fill="#6ee7b7" font-family="monospace" font-size="9">[ AP2 Signed &amp; Approved ]</text>
+    </g>
+
+    <!-- Top Title Badge -->
+    <g transform="translate(260, 14)">
+      <rect width="280" height="26" rx="6" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+      <text x="140" y="17" text-anchor="middle" fill="#f8fafc" font-family="monospace" font-size="11" font-weight="bold" letter-spacing="1">AGENTIC COMMERCE ARCHITECTURE</text>
+    </g>
+  </svg>
   <br/>
   <em>Live Multi-Agent Communication: Buyer Agent and Merchant Agent negotiating over AP2 / MCP protocol.</em>
 </div>
