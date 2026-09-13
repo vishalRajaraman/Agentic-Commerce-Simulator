@@ -8,7 +8,7 @@ from db import mongo_db
 # Initialize AsyncOpenAI client with NVIDIA endpoint
 client = AsyncOpenAI(
   base_url="https://integrate.api.nvidia.com/v1",
-  api_key=os.getenv("NIM_API_KEY", "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"),
+  api_key=os.getenv("NIM_API_KEY"),
   max_retries=10,
   timeout=120.0
 )
